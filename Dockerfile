@@ -41,11 +41,14 @@ COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 
 # Ensure writable runtime directories exist even when gitignored contents are empty
 RUN mkdir -p \
-        storage/framework/{cache/data,sessions,views,testing} \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/framework/testing \
     storage/logs \
     storage/app/public \
     bootstrap/cache \
-    hown -R www-data:www-data storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R ug+rwx storage bootstrap/cache
 
 USER www-data
