@@ -28,7 +28,7 @@ ENV PHP_OPCACHE_ENABLE=1 \
     AUTORUN_LARAVEL_MIGRATION=true \
     AUTORUN_LARAVEL_CONFIG_CACHE=true \
     AUTORUN_LARAVEL_ROUTE_CACHE=true \
-    AUTORUN_LARAVEL_VIEW_CACHE=true \
+    AUTORUN_LARAVEL_VIEW_CACHE=false \
     AUTORUN_LARAVEL_EVENT_CACHE=true \
     AUTORUN_LARAVEL_STORAGE_LINK=true
 
@@ -39,8 +39,10 @@ RUN install-php-extensions intl bcmath pcntl pdo_mysql
 
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 
-# Ensure writable runtime directories exist even when gitignored contents are empty
+# Headless API has no Blade templates, but `php artisan optimize` still needs this path.
+# Also ensure writable runtime directories exist when gitignored contents are empty.
 RUN mkdir -p \
+    resources/views \
     storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/views \
@@ -48,7 +50,7 @@ RUN mkdir -p \
     storage/logs \
     storage/app/public \
     bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache resources/views \
     && chmod -R ug+rwx storage bootstrap/cache
 
 USER www-data
