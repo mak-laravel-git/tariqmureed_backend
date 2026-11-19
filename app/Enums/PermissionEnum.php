@@ -29,6 +29,10 @@ enum PermissionEnum: string
     // PERMISSIONS (developer-defined, read-only)
     case PERMISSIONS_INDEX = 'permissions.index';
 
+    // INTEGRATIONS (SportMonks status page and manual sync)
+    case INTEGRATIONS_VIEW = 'integrations.view';
+    case INTEGRATIONS_SYNC = 'integrations.sync';
+
     /**
      * Display group stored in the permissions.group column ("Users", "Roles", ...).
      */
