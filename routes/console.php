@@ -18,8 +18,8 @@ Artisan::command('inspire', function () {
 | (`schedule`) and can be changed from .env without touching this file.
 |
 | Something has to run the Laravel scheduler all the time:
-|   - VPS: Supervisor, see supervisor-scheduler.conf in the project root.
-|   - Coolify: a Scheduled Task `php artisan schedule:run` every minute.
+|   - Docker / Coolify: the Dockerfile starts Supervisor (supervisord.conf), nothing else to set up.
+|   - VPS without Docker: Supervisor, see supervisor-scheduler.conf in the project root.
 |   - cPanel: cron `* * * * * php /path/to/artisan schedule:run`.
 |
 */

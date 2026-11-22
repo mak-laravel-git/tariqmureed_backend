@@ -39,6 +39,20 @@ RUN install-php-extensions intl bcmath pcntl pdo_mysql
 
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 
+# Supervisor keeps `php artisan schedule:work` running (SportMonks auto sync). It is registered as an
+# s6-overlay service, so the image init starts it next to nginx and php-fpm and the container's
+# health follows the same rules as before. No Coolify "Scheduled Task" is needed any more.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /etc/s6-overlay/s6-rc.d/supervisord/dependencies.d /etc/s6-overlay/s6-rc.d/user/contents.d /etc/supervisor \
+    && echo longrun > /etc/s6-overlay/s6-rc.d/supervisord/type \
+    && printf '#!/command/with-contenv sh\nexec supervisord --nodaemon --configuration /etc/supervisor/supervisord.conf\n' > /etc/s6-overlay/s6-rc.d/supervisord/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/supervisord/run \
+    && touch /etc/s6-overlay/s6-rc.d/user/contents.d/supervisord
+
+COPY supervisord.conf /etc/supervisor/supervisord.conf
+
 # Headless API has no Blade templates, but `php artisan optimize` still needs this path.
 # Also ensure writable runtime directories exist when gitignored contents are empty.
 RUN mkdir -p \
