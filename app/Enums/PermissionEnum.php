@@ -33,6 +33,14 @@ enum PermissionEnum: string
     case INTEGRATIONS_VIEW = 'integrations.view';
     case INTEGRATIONS_SYNC = 'integrations.sync';
 
+    // SETTINGS (website settings: contact details, Google Analytics / AdSense IDs, consent mode)
+    case SETTINGS_VIEW = 'settings.view';
+    case SETTINGS_EDIT = 'settings.edit';
+
+    // PAGES (privacy policy, cookie and terms pages)
+    case PAGES_VIEW = 'pages.view';
+    case PAGES_EDIT = 'pages.edit';
+
     /**
      * Display group stored in the permissions.group column ("Users", "Roles", ...).
      */

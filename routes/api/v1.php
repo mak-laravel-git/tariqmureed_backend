@@ -1,12 +1,16 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
+use App\Http\Controllers\Api\V1\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SportMonksIntegrationController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CompetitionController;
 use App\Http\Controllers\Api\V1\MatchController;
 use App\Http\Controllers\Api\V1\MatchdayController;
+use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PlayerController;
 use App\Http\Controllers\Api\V1\SeriesController;
+use App\Http\Controllers\Api\V1\SiteSettingsController;
 use App\Http\Controllers\Api\V1\TeamController;
 use Illuminate\Support\Facades\Route;
 
@@ -62,3 +66,27 @@ Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
         Route::get('/', 'show')->middleware('can:integrations.view')->name('show');
         Route::post('sync', 'sync')->middleware('can:integrations.sync')->name('sync');
     });
+
+// ── Public site content (edited in the admin dashboard) ──────────────────────
+Route::get('settings', SiteSettingsController::class)->name('settings.show');
+Route::get('pages/{slug}', [PageController::class, 'show'])->name('pages.show');
+
+// ── Admin dashboard API (the Next.js admin calls /api/v1/admin/...) ──────────
+Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(function () {
+    Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
+        ->controller(SportMonksIntegrationController::class)
+        ->group(function () {
+            Route::get('/', 'show')->middleware('can:integrations.view')->name('show');
+            Route::post('sync', 'sync')->middleware('can:integrations.sync')->name('sync');
+        });
+
+    Route::get('settings', [AdminSettingsController::class, 'show'])->middleware('can:settings.view')->name('settings.show');
+    Route::put('settings', [AdminSettingsController::class, 'update'])->middleware('can:settings.edit')->name('settings.update');
+
+    Route::prefix('pages')->name('pages.')->controller(AdminPageController::class)->group(function () {
+        Route::get('/', 'index')->middleware('can:pages.view')->name('index');
+        Route::get('{slug}', 'show')->middleware('can:pages.view')->name('show');
+        Route::put('{slug}', 'update')->middleware('can:pages.edit')->name('update');
+        Route::delete('{slug}', 'destroy')->middleware('can:pages.edit')->name('destroy');
+    });
+});
