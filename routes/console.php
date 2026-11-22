@@ -14,9 +14,13 @@ Artisan::command('inspire', function () {
 | SportMonks sync schedule
 |--------------------------------------------------------------------------
 |
-| Runs only once SPORTMONKS_API_TOKEN is set. The server needs the usual
-| Laravel scheduler entry: `* * * * * php artisan schedule:run`.
-| The calls per hour stay far below the plan limit (2000 per endpoint).
+| Runs only once SPORTMONKS_API_TOKEN is set. The intervals are in config/sportmonks.php
+| (`schedule`) and can be changed from .env without touching this file.
+|
+| Something has to run the Laravel scheduler all the time:
+|   - VPS: Supervisor, see supervisor-scheduler.conf in the project root.
+|   - Coolify: a Scheduled Task `php artisan schedule:run` every minute.
+|   - cPanel: cron `* * * * * php /path/to/artisan schedule:run`.
 |
 */
 $sportMonksConfigured = fn (): bool => filled(config('sportmonks.token'));
@@ -27,11 +31,15 @@ Schedule::command('sportmonks:sync all')
     ->when(fn (): bool => $sportMonksConfigured() && League::query()->doesntExist())
     ->withoutOverlapping(30);
 
-Schedule::command('sportmonks:sync live')->everyMinute()->when($sportMonksConfigured)->withoutOverlapping(5);
-Schedule::command('sportmonks:sync details')->everyFiveMinutes()->when($sportMonksConfigured)->withoutOverlapping(15);
-Schedule::command('sportmonks:sync fixtures')->hourly()->when($sportMonksConfigured)->withoutOverlapping(30);
-Schedule::command('sportmonks:sync standings')->everySixHours()->when($sportMonksConfigured)->withoutOverlapping(30);
-Schedule::command('sportmonks:sync leagues')->dailyAt('03:00')->when($sportMonksConfigured);
-Schedule::command('sportmonks:sync venues')->dailyAt('03:10')->when($sportMonksConfigured);
-Schedule::command('sportmonks:sync teams')->dailyAt('03:20')->when($sportMonksConfigured);
-Schedule::command('sportmonks:sync squads')->dailyAt('04:00')->when($sportMonksConfigured)->withoutOverlapping(60);
+/** @var array<string, int> $overlapMinutes Minutes an unfinished run blocks the next one (0 = no lock). */
+$overlapMinutes = ['live' => 5, 'details' => 15, 'fixtures' => 30, 'standings' => 30, 'leagues' => 0, 'venues' => 0, 'teams' => 0, 'squads' => 60];
+
+foreach ($overlapMinutes as $target => $minutes) {
+    $event = Schedule::command("sportmonks:sync {$target}")
+        ->cron((string) config("sportmonks.schedule.{$target}"))
+        ->when($sportMonksConfigured);
+
+    if ($minutes > 0) {
+        $event->withoutOverlapping($minutes);
+    }
+}

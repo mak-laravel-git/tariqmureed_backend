@@ -46,6 +46,25 @@ return [
         'squads_per_run' => (int) env('SPORTMONKS_SQUADS_PER_RUN', 40),
     ],
 
+    /*
+    | How often each sync runs, as cron expressions (server time, UTC by default).
+    |
+    | Fast-changing data runs often, slow-changing data twice a day. Calls stay far below the
+    | plan limit: `live` makes no call at all while no match is near its start time, `details`
+    | only fetches scorecards of matches that just finished, and the rest are a few calls each.
+    | Override any of them in .env, e.g. SPORTMONKS_SCHEDULE_FIXTURES="0 * * * *" for hourly.
+    */
+    'schedule' => [
+        'live' => env('SPORTMONKS_SCHEDULE_LIVE', '* * * * *'),                // every minute
+        'details' => env('SPORTMONKS_SCHEDULE_DETAILS', '*/5 * * * *'),        // every 5 minutes
+        'fixtures' => env('SPORTMONKS_SCHEDULE_FIXTURES', '0 */2 * * *'),      // every 2 hours
+        'standings' => env('SPORTMONKS_SCHEDULE_STANDINGS', '10 */3 * * *'),   // every 3 hours
+        'leagues' => env('SPORTMONKS_SCHEDULE_LEAGUES', '0 3,15 * * *'),       // every 12 hours
+        'venues' => env('SPORTMONKS_SCHEDULE_VENUES', '10 3,15 * * *'),        // every 12 hours
+        'teams' => env('SPORTMONKS_SCHEDULE_TEAMS', '20 3,15 * * *'),          // every 12 hours
+        'squads' => env('SPORTMONKS_SCHEDULE_SQUADS', '30 4,16 * * *'),        // every 12 hours
+    ],
+
     // Timezone used for "today" and the HH:mm start time labels.
     'display_timezone' => env('SPORTMONKS_DISPLAY_TIMEZONE', 'Asia/Dhaka'),
 
