@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Enums\RoleEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\UpdateStaffRequest;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,6 +65,7 @@ class StaffController extends Controller
 
         $user->update(['name' => $request->validated('title'), 'email' => $request->validated('subtitle')]);
         $user->syncRoles([$role]);
+        ActivityLog::record($request->user(), 'updated', 'staff account', $user->name);
 
         return response()->json(['data' => $this->record($user->refresh()->load('roles'))]);
     }
@@ -82,6 +84,7 @@ class StaffController extends Controller
             return response()->json(['message' => 'The last super admin cannot be deleted.'], 422);
         }
 
+        ActivityLog::record($request->user(), 'deleted', 'staff account', $user->name);
         $user->tokens()->delete();
         $user->delete();
 

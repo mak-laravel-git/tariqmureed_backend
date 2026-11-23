@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\UpdatePageRequest;
+use App\Models\ActivityLog;
 use App\Models\SitePage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PageController extends Controller
 {
@@ -41,15 +43,18 @@ class PageController extends Controller
             ['title' => $request->validated('title'), 'description' => $request->validated('description'), 'content' => $request->validated('content')],
         );
 
+        ActivityLog::record($request->user(), 'updated', 'page', $page->title);
+
         return response()->json(['data' => $this->payload($page)]);
     }
 
     /**
      * Remove the saved text so the website's built-in text is used again.
      */
-    public function destroy(string $slug): JsonResponse
+    public function destroy(Request $request, string $slug): JsonResponse
     {
         SitePage::query()->where('slug', $this->knownSlug($slug))->delete();
+        ActivityLog::record($request->user(), 'reset', 'page', SitePage::SLUGS[$slug]);
 
         return response()->json(['message' => 'The page was reset to its built-in text.']);
     }

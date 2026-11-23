@@ -1,22 +1,31 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\ActivityLogController as AdminActivityLogController;
+use App\Http\Controllers\Api\V1\Admin\AdvertisementController as AdminAdvertisementController;
+use App\Http\Controllers\Api\V1\Admin\ArticleController as AdminArticleController;
+use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\CompetitionController as AdminCompetitionController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Api\V1\Admin\MediaController as AdminMediaController;
 use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\V1\Admin\ProfileController as AdminProfileController;
 use App\Http\Controllers\Api\V1\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SportMonksIntegrationController;
 use App\Http\Controllers\Api\V1\Admin\StaffController as AdminStaffController;
+use App\Http\Controllers\Api\V1\Admin\WriterController as AdminWriterController;
+use App\Http\Controllers\Api\V1\ArticleController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CompetitionController;
 use App\Http\Controllers\Api\V1\MatchController;
 use App\Http\Controllers\Api\V1\MatchdayController;
+use App\Http\Controllers\Api\V1\NewsController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PlayerController;
 use App\Http\Controllers\Api\V1\SeriesController;
 use App\Http\Controllers\Api\V1\SiteSettingsController;
 use App\Http\Controllers\Api\V1\TeamController;
+use App\Http\Controllers\Api\V1\WriterController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -73,6 +82,16 @@ Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
     });
 
 // ── Public site content (edited in the admin dashboard) ──────────────────────
+// ── Stories and authors (written in the admin dashboard) ─────────────────────
+Route::get('articles/featured', [ArticleController::class, 'featured'])->name('articles.featured');
+Route::get('articles/top-headlines', [ArticleController::class, 'topHeadlines'])->name('articles.top-headlines');
+Route::get('articles/most-read', [ArticleController::class, 'mostRead'])->name('articles.most-read');
+Route::get('articles', [ArticleController::class, 'index'])->name('articles.index');
+Route::get('articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
+Route::get('news', NewsController::class)->name('news');
+Route::get('writers', [WriterController::class, 'index'])->name('writers.index');
+Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
+
 Route::get('settings', SiteSettingsController::class)->name('settings.show');
 Route::get('pages/{slug}', [PageController::class, 'show'])->name('pages.show');
 
@@ -93,6 +112,29 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
 
     Route::get('roles/permissions', [AdminRoleController::class, 'permissions'])->middleware('can:roles.view')->name('roles.permissions');
     Route::put('roles/{role}/permissions', [AdminRoleController::class, 'update'])->middleware('can:roles.edit')->name('roles.update');
+
+    // Modules that share the common admin table and form: path => [controller, permission prefix].
+    foreach ([
+        'articles' => [AdminArticleController::class, 'articles'],
+        'categories' => [AdminCategoryController::class, 'categories'],
+        'writers' => [AdminWriterController::class, 'writers'],
+        'advertisements' => [AdminAdvertisementController::class, 'advertisements'],
+    ] as $path => [$controller, $permission]) {
+        Route::prefix($path)->name("{$path}.")->controller($controller)->group(function () use ($permission) {
+            Route::get('/', 'index')->middleware("can:{$permission}.index")->name('index');
+            Route::post('/', 'store')->middleware("can:{$permission}.create")->name('store');
+            Route::get('{id}', 'show')->middleware("can:{$permission}.view")->name('show');
+            Route::put('{id}', 'update')->middleware("can:{$permission}.edit")->name('update');
+            Route::delete('{id}', 'destroy')->middleware("can:{$permission}.delete")->name('destroy');
+        });
+    }
+
+    Route::get('media', [AdminMediaController::class, 'index'])->middleware('can:media.index')->name('media.index');
+    Route::post('media', [AdminMediaController::class, 'store'])->middleware('can:media.create')->name('media.store');
+    Route::delete('media/{id}', [AdminMediaController::class, 'destroy'])->middleware('can:media.delete')->name('media.destroy');
+
+    Route::get('activity-logs', [AdminActivityLogController::class, 'index'])->middleware('can:activity.index')->name('activity-logs.index');
+    Route::get('activity-logs/{id}', [AdminActivityLogController::class, 'show'])->middleware('can:activity.index')->name('activity-logs.show');
 
     Route::get('competitions', [AdminCompetitionController::class, 'index'])->middleware('can:integrations.view')->name('competitions.index');
     Route::get('competitions/{id}', [AdminCompetitionController::class, 'show'])->middleware('can:integrations.view')->name('competitions.show');

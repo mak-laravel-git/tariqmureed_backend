@@ -4,20 +4,22 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Enums\SyncTarget;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
+use App\Models\Article;
+use App\Models\Category;
 use App\Models\Fixture;
-use App\Models\League;
+use App\Models\MediaAsset;
 use App\Models\Player;
 use App\Models\SitePage;
 use App\Models\SyncRun;
-use App\Models\Team;
-use App\Models\Venue;
+use App\Models\Writer;
 use App\Services\SportMonks\SportMonksClient;
 use Illuminate\Http\JsonResponse;
 
 class DashboardController extends Controller
 {
     /**
-     * Overview numbers, recent sync activity and system status for the admin dashboard.
+     * Overview numbers, recent activity and system status for the admin dashboard.
      */
     public function __invoke(SportMonksClient $client): JsonResponse
     {
@@ -27,14 +29,14 @@ class DashboardController extends Controller
 
         return response()->json(['data' => [
             'stats' => [
-                $this->stat('Live matches', Fixture::query()->where('is_live', true)->count(), 'Being played right now', 'globe'),
+                $this->stat('Published stories', Article::query()->visible()->count(), 'Live on the public site', 'globe'),
+                $this->stat('Drafts and pending', Article::query()->whereIn('status', [Article::DRAFT, Article::PENDING])->count(), 'Not published yet', 'draft'),
+                $this->stat('Live matches', Fixture::query()->where('is_live', true)->count(), 'Being played right now', 'article'),
                 $this->stat('Upcoming matches', Fixture::query()->where('starting_at', '>', now())->count(), 'Scheduled to start', 'clock'),
-                $this->stat('Matches stored', $matches, 'Synced from SportMonks', 'article'),
-                $this->stat('Competitions', League::query()->count(), 'Leagues and tournaments', 'folder'),
-                $this->stat('Teams', Team::query()->count(), 'Clubs and national sides', 'users'),
-                $this->stat('Players', $players, 'Squad members on file', 'user'),
-                $this->stat('Venues', Venue::query()->count(), 'Grounds on file', 'image'),
-                $this->stat('Legal pages edited', $customisedPages, 'Of '.count(SitePage::SLUGS).' editable pages', 'draft'),
+                $this->stat('Matches stored', $matches, 'Synced from SportMonks', 'folder'),
+                $this->stat('Categories', Category::query()->count(), 'News categories', 'folder'),
+                $this->stat('Authors', Writer::query()->count(), 'Credited on stories', 'users'),
+                $this->stat('Media assets', MediaAsset::query()->count(), 'Images in the library', 'image'),
             ],
             'activity' => $this->activity(),
             'system' => $this->system($client, $matches, $players, $customisedPages),
@@ -50,33 +52,52 @@ class DashboardController extends Controller
     }
 
     /**
-     * The latest sync runs, newest first.
+     * The latest dashboard actions and sync runs together, newest first.
      *
      * @return array<int, array{actor: string, initials: string, action: string, target: string, relative: string, absolute: string}>
      */
     private function activity(): array
     {
-        return SyncRun::query()
-            ->orderByDesc('id')
-            ->limit(6)
-            ->get()
-            ->map(function (SyncRun $run): array {
-                $when = $run->finished_at ?? $run->started_at;
+        $actions = ActivityLog::query()->latest('id')->limit(6)->get()->map(fn (ActivityLog $log): array => [
+            'at' => $log->created_at,
+            'actor' => $log->actor,
+            'initials' => $this->initials($log->actor),
+            'action' => "{$log->action} {$log->subject}",
+            'target' => $log->target,
+        ]);
 
-                return [
-                    'actor' => 'SportMonks sync',
-                    'initials' => 'SM',
-                    'action' => match ($run->status) {
-                        SyncRun::SUCCESS => 'completed',
-                        SyncRun::RUNNING => 'started',
-                        default => 'failed',
-                    },
-                    'target' => (SyncTarget::tryFrom($run->target)?->label() ?? $run->target).($run->status === SyncRun::SUCCESS ? " · {$run->records_synced} records" : ''),
-                    'relative' => $when->diffForHumans(),
-                    'absolute' => $when->format('j M, H:i'),
-                ];
-            })
+        $syncs = SyncRun::query()->latest('id')->limit(6)->get()->map(function (SyncRun $run): array {
+            return [
+                'at' => $run->finished_at ?? $run->started_at,
+                'actor' => 'SportMonks sync',
+                'initials' => 'SM',
+                'action' => match ($run->status) {
+                    SyncRun::SUCCESS => 'completed',
+                    SyncRun::RUNNING => 'started',
+                    default => 'failed',
+                },
+                'target' => (SyncTarget::tryFrom($run->target)?->label() ?? $run->target).($run->status === SyncRun::SUCCESS ? " · {$run->records_synced} records" : ''),
+            ];
+        });
+
+        return $actions->concat($syncs)
+            ->sortByDesc(fn (array $entry): int => $entry['at']->getTimestamp())
+            ->take(6)
+            ->map(fn (array $entry): array => [
+                'actor' => $entry['actor'],
+                'initials' => $entry['initials'],
+                'action' => $entry['action'],
+                'target' => $entry['target'],
+                'relative' => $entry['at']->diffForHumans(),
+                'absolute' => $entry['at']->format('j M, H:i'),
+            ])
+            ->values()
             ->all();
+    }
+
+    private function initials(string $name): string
+    {
+        return mb_strtoupper(collect(preg_split('/\s+/', trim($name)) ?: [])->map(fn (string $part): string => mb_substr($part, 0, 1))->take(2)->implode(''));
     }
 
     /**

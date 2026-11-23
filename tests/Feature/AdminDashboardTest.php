@@ -44,7 +44,7 @@ it('shows real counts, recent syncs and system status to an admin', function () 
     expect($stats['Live matches'])->toBe('1')
         ->and($stats['Upcoming matches'])->toBe('2')
         ->and($stats['Matches stored'])->toBe('3')
-        ->and($data['activity'][0])->toMatchArray(['action' => 'completed', 'target' => 'Fixtures & results · 42 records'])
+        ->and(collect($data['activity'])->firstWhere('actor', 'SportMonks sync'))->toMatchArray(['action' => 'completed', 'target' => 'Fixtures & results · 42 records'])
         ->and(collect($data['system'])->firstWhere('name', 'SportMonks API')['status'])->toBe('Connected');
 });
 
