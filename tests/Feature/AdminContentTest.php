@@ -200,6 +200,7 @@ it('uploads and deletes an image', function () {
 
     $asset = MediaAsset::query()->findOrFail($id);
     Storage::disk('public')->assertExists($asset->path);
+    expect($asset->url())->toEndWith('/storage/'.$asset->path);
     $this->getJson('/api/v1/admin/media')->assertOk()->assertJsonCount(1, 'data');
 
     $this->deleteJson("/api/v1/admin/media/{$id}")->assertNoContent();

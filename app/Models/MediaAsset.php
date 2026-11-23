@@ -5,7 +5,6 @@ namespace App\Models;
 use Database\Factories\MediaAssetFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class MediaAsset extends Model
 {
@@ -15,10 +14,11 @@ class MediaAsset extends Model
     protected $guarded = [];
 
     /**
-     * Public URL of the stored file.
+     * Public URL of the stored file. It follows the address the dashboard is opened on, so it stays correct
+     * (and https in production) even when APP_URL is missing or wrong.
      */
     public function url(): string
     {
-        return Storage::disk('public')->url($this->path);
+        return url('storage/'.ltrim($this->path, '/'));
     }
 }
