@@ -183,7 +183,7 @@ it('manages categories, authors and advertisements', function () {
         ->assertCreated()->assertJsonPath('data.notes', 'Bio text');
     expect(Writer::query()->first()->slug)->toBe('priya-nair');
 
-    $this->postJson('/api/v1/admin/advertisements', ['title' => 'Summer campaign', 'subtitle' => 'Homepage', 'owner' => 'Acme', 'status' => 'Active'])->assertCreated();
+    $this->postJson('/api/v1/admin/advertisements', ['title' => 'Summer campaign', 'subtitle' => 'home-top', 'owner' => 'Acme', 'status' => 'Active', 'adType' => 'image', 'image' => '/images/news/stadium-lights.jpg'])->assertCreated();
     expect(Advertisement::query()->count())->toBe(1);
 
     $this->deleteJson("/api/v1/admin/categories/{$category}")->assertNoContent();

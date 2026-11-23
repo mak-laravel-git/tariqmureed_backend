@@ -48,6 +48,16 @@ abstract class ResourceController extends Controller
     abstract protected function rules(Request $request): array;
 
     /**
+     * Custom validation messages.
+     *
+     * @return array<string, string>
+     */
+    protected function messages(): array
+    {
+        return [];
+    }
+
+    /**
      * Fill the model from the validated form data and save it.
      *
      * @param  TModel  $model
@@ -107,7 +117,7 @@ abstract class ResourceController extends Controller
     {
         $model = new ($this->model());
 
-        $this->save($model, $request->validate($this->rules($request)));
+        $this->save($model, $request->validate($this->rules($request), $this->messages()));
         ActivityLog::record($request->user(), 'created', $this->subject(), $this->label($model));
 
         return response()->json(['data' => $this->record($model->load($this->relations()))], 201);
@@ -117,7 +127,7 @@ abstract class ResourceController extends Controller
     {
         $model = ($this->model())::query()->findOrFail($id);
 
-        $this->save($model, $request->validate($this->rules($request)));
+        $this->save($model, $request->validate($this->rules($request), $this->messages()));
         ActivityLog::record($request->user(), 'updated', $this->subject(), $this->label($model));
 
         return response()->json(['data' => $this->record($model->load($this->relations()))]);

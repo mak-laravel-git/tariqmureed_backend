@@ -17,9 +17,17 @@ class AdvertisementFactory extends Factory
     {
         return [
             'name' => fake()->words(3, true).' campaign',
-            'placement' => 'Homepage leaderboard',
+            'placement' => 'home-top',
             'advertiser' => fake()->company(),
+            'type' => Advertisement::TYPE_IMAGE,
+            'image' => 'https://example.com/banner.jpg',
+            'link_url' => 'https://example.com/offer',
             'status' => 'Active',
         ];
+    }
+
+    public function adsense(string $slot = '1234567890'): static
+    {
+        return $this->state(fn (): array => ['type' => Advertisement::TYPE_ADSENSE, 'image' => null, 'link_url' => null, 'adsense_slot' => $slot]);
     }
 }
