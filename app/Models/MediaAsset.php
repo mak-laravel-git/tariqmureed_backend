@@ -14,11 +14,12 @@ class MediaAsset extends Model
     protected $guarded = [];
 
     /**
-     * Public URL of the stored file. It follows the address the dashboard is opened on, so it stays correct
-     * (and https in production) even when APP_URL is missing or wrong.
+     * Public URL of the image: the linked address for an image added by URL, otherwise the stored file. A stored
+     * file's URL follows the address the dashboard is opened on, so it stays correct (and https in production)
+     * even when APP_URL is missing or wrong.
      */
     public function url(): string
     {
-        return url('storage/'.ltrim($this->path, '/'));
+        return $this->external_url ?: url('storage/'.ltrim($this->path, '/'));
     }
 }

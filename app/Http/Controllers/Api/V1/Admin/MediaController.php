@@ -23,21 +23,28 @@ class MediaController extends Controller
     }
 
     /**
-     * Upload one image. SVG is not accepted because it can carry scripts.
+     * Add one image: an uploaded file (SVG is not accepted because it can carry scripts), or a link to an image
+     * that is already online.
      */
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'file' => ['nullable', 'required_without:url', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'url' => ['nullable', 'required_without:file', 'url:http,https', 'max:500'],
             'title' => ['nullable', 'string', 'max:150'],
+            'alt' => ['nullable', 'string', 'max:250'],
         ]);
 
         $file = $request->file('file');
+        $name = $file ? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) : pathinfo((string) parse_url($request->string('url')->toString(), PHP_URL_PATH), PATHINFO_FILENAME);
+
         $asset = MediaAsset::query()->create([
-            'title' => $request->filled('title') ? trim($request->string('title')->toString()) : Str::limit(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 140, ''),
-            'path' => $file->store('media', 'public'),
-            'mime' => (string) $file->getMimeType(),
-            'size' => $file->getSize(),
+            'title' => $request->filled('title') ? trim($request->string('title')->toString()) : Str::limit($name ?: 'Image', 140, ''),
+            'alt_text' => $request->filled('alt') ? trim($request->string('alt')->toString()) : null,
+            'path' => $file ? $file->store('media', 'public') : 'external',
+            'external_url' => $file ? null : $request->string('url')->toString(),
+            'mime' => $file ? (string) $file->getMimeType() : 'image/external',
+            'size' => $file ? $file->getSize() : 0,
             'user_id' => $request->user()->id,
         ]);
 
@@ -50,7 +57,10 @@ class MediaController extends Controller
     {
         $asset = MediaAsset::query()->findOrFail($id);
 
-        Storage::disk('public')->delete($asset->path);
+        if (! $asset->external_url) {
+            Storage::disk('public')->delete($asset->path);
+        }
+
         ActivityLog::record($request->user(), 'deleted', 'media', $asset->title);
         $asset->delete();
 
@@ -72,7 +82,9 @@ class MediaController extends Controller
         return [
             'id' => (string) $asset->id,
             'title' => $asset->title,
-            'meta' => Str::upper(pathinfo($asset->path, PATHINFO_EXTENSION)).' · '.$this->readableSize($asset->size),
+            'meta' => $asset->external_url
+                ? 'LINK · '.parse_url($asset->external_url, PHP_URL_HOST)
+                : Str::upper(pathinfo($asset->path, PATHINFO_EXTENSION)).' · '.$this->readableSize($asset->size),
             'url' => $asset->url(),
         ];
     }

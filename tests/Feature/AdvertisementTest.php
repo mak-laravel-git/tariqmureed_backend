@@ -29,8 +29,8 @@ function adPayload(array $overrides = []): array
 {
     return [
         'title' => 'Summer sale',
-        'subtitle' => 'home-top',
-        'owner' => 'Acme',
+        'owner' => 'home-top',
+        'subtitle' => 'Acme',
         'status' => 'Active',
         'adType' => 'image',
         'image' => 'https://api.example.com/storage/media/banner.png',
@@ -73,10 +73,10 @@ it('creates an image ad and an AdSense ad, and reads them back', function () {
 
     $image = $this->postJson('/api/v1/admin/advertisements', adPayload())->assertCreated()->json('data');
 
-    expect($image)->toMatchArray(['placement' => 'home-top', 'adType' => 'image', 'subtitle' => AdPlacements::label('home-top')]);
+    expect($image)->toMatchArray(['placement' => 'home-top', 'adType' => 'image', 'owner' => AdPlacements::label('home-top')]);
 
     $this->postJson('/api/v1/admin/advertisements', adPayload([
-        'title' => 'AdSense box', 'subtitle' => 'news-sidebar', 'adType' => 'adsense', 'adsenseSlot' => '1234567890', 'image' => null, 'linkUrl' => 'https://ignored.example',
+        'title' => 'AdSense box', 'owner' => 'news-sidebar', 'adType' => 'adsense', 'adsenseSlot' => '1234567890', 'image' => null, 'linkUrl' => 'https://ignored.example',
     ]))->assertCreated()->assertJsonPath('data.linkUrl', null)->assertJsonPath('data.adsenseSlot', '1234567890');
 
     $this->getJson('/api/v1/admin/advertisements/'.$image['id'])->assertOk()->assertJsonPath('data.linkUrl', 'https://acme.example/sale');
@@ -99,7 +99,7 @@ it('reads ad dates in the site timezone', function () {
 it('rejects an ad that is incomplete or points somewhere unknown', function () {
     signInForAds();
 
-    $this->postJson('/api/v1/admin/advertisements', adPayload(['subtitle' => 'nowhere']))->assertUnprocessable()->assertJsonValidationErrors('subtitle');
+    $this->postJson('/api/v1/admin/advertisements', adPayload(['owner' => 'nowhere']))->assertUnprocessable()->assertJsonValidationErrors('owner');
     $this->postJson('/api/v1/admin/advertisements', adPayload(['image' => null]))->assertUnprocessable()->assertJsonValidationErrors('image');
     $this->postJson('/api/v1/admin/advertisements', adPayload(['adType' => 'adsense', 'adsenseSlot' => 'abc']))->assertUnprocessable()->assertJsonValidationErrors('adsenseSlot');
     $this->postJson('/api/v1/admin/advertisements', adPayload(['linkUrl' => 'javascript:alert(1)']))->assertUnprocessable()->assertJsonValidationErrors('linkUrl');

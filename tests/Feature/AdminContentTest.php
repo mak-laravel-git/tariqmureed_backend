@@ -183,7 +183,7 @@ it('manages categories, authors and advertisements', function () {
         ->assertCreated()->assertJsonPath('data.notes', 'Bio text');
     expect(Writer::query()->first()->slug)->toBe('priya-nair');
 
-    $this->postJson('/api/v1/admin/advertisements', ['title' => 'Summer campaign', 'subtitle' => 'home-top', 'owner' => 'Acme', 'status' => 'Active', 'adType' => 'image', 'image' => '/images/news/stadium-lights.jpg'])->assertCreated();
+    $this->postJson('/api/v1/admin/advertisements', ['title' => 'Summer campaign', 'owner' => 'home-top', 'subtitle' => 'Acme', 'status' => 'Active', 'adType' => 'image', 'image' => '/images/news/stadium-lights.jpg'])->assertCreated();
     expect(Advertisement::query()->count())->toBe(1);
 
     $this->deleteJson("/api/v1/admin/categories/{$category}")->assertNoContent();
@@ -214,6 +214,22 @@ it('names an uploaded image with the title the editor typed', function () {
     $this->postJson('/api/v1/admin/media', ['file' => UploadedFile::fake()->image('IMG_0001.png'), 'title' => 'Dhaka stadium at night'])
         ->assertCreated()
         ->assertJsonPath('data.title', 'Dhaka stadium at night');
+});
+
+it('adds an image by link, keeps its alt text and never touches storage for it', function () {
+    Storage::fake('public');
+    signInForContent();
+
+    $created = $this->postJson('/api/v1/admin/media', ['url' => 'https://cdn.example.com/photos/final-night.jpg', 'alt' => 'Floodlit stadium'])
+        ->assertCreated()
+        ->assertJsonPath('data.title', 'final-night')
+        ->assertJsonPath('data.url', 'https://cdn.example.com/photos/final-night.jpg')
+        ->json('data');
+
+    expect(MediaAsset::query()->findOrFail($created['id'])->alt_text)->toBe('Floodlit stadium');
+
+    $this->postJson('/api/v1/admin/media', [])->assertUnprocessable();
+    $this->deleteJson('/api/v1/admin/media/'.$created['id'])->assertNoContent();
 });
 
 it('rejects files that are not images', function () {

@@ -42,8 +42,8 @@ class AdvertisementController extends ResourceController
     {
         return [
             'title' => ['required', 'string', 'max:150'],
-            'subtitle' => ['required', Rule::in(AdPlacements::keys())],
-            'owner' => ['nullable', 'string', 'max:120'],
+            'subtitle' => ['nullable', 'string', 'max:120'],
+            'owner' => ['required', Rule::in(AdPlacements::keys())],
             'status' => ['required', Rule::in(['Active', 'Draft', 'Archived'])],
             'notes' => ['nullable', 'string', 'max:2000'],
             'adType' => ['required', Rule::in([Advertisement::TYPE_IMAGE, Advertisement::TYPE_ADSENSE])],
@@ -61,7 +61,8 @@ class AdvertisementController extends ResourceController
     protected function messages(): array
     {
         return [
-            'subtitle.in' => 'Choose where on the website the ad should appear.',
+            'owner.in' => 'Choose where on the website the ad should appear.',
+            'owner.required' => 'Choose where on the website the ad should appear.',
             'image.required_if' => 'Choose the banner image from the media library.',
             'adsenseSlot.required_if' => 'Enter the AdSense ad unit (slot) ID.',
             'adsenseSlot.regex' => 'The AdSense slot ID is a number of 6 to 20 digits.',
@@ -75,8 +76,8 @@ class AdvertisementController extends ResourceController
 
         $model->fill([
             'name' => $data['title'],
-            'placement' => $data['subtitle'],
-            'advertiser' => $data['owner'] ?? null,
+            'placement' => $data['owner'],
+            'advertiser' => $data['subtitle'] ?? null,
             'status' => $data['status'],
             'notes' => $data['notes'] ?? null,
             'type' => $data['adType'],
@@ -93,8 +94,8 @@ class AdvertisementController extends ResourceController
         return [
             'id' => (string) $model->id,
             'title' => $model->name,
-            'subtitle' => AdPlacements::label($model->placement),
-            'owner' => (string) $model->advertiser,
+            'subtitle' => (string) $model->advertiser,
+            'owner' => AdPlacements::label($model->placement),
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->notes,

@@ -18,7 +18,8 @@ class ArticleController extends Controller
      */
     public function featured(Request $request): JsonResponse
     {
-        $stories = $this->newest()->limit(5)->get();
+        // Stories marked "Featured Article" in the dashboard lead, newest first; the rest follow by date.
+        $stories = $this->stories()->orderByDesc('is_featured')->latest('published_at')->limit(5)->get();
 
         abort_if($stories->isEmpty(), 404);
 

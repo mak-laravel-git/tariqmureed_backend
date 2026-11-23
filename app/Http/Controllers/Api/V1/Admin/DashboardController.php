@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Enums\SyncTarget;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Advertisement;
 use App\Models\Article;
 use App\Models\Category;
 use App\Models\Fixture;
@@ -12,6 +13,7 @@ use App\Models\MediaAsset;
 use App\Models\Player;
 use App\Models\SitePage;
 use App\Models\SyncRun;
+use App\Models\User;
 use App\Models\Writer;
 use App\Services\SportMonks\SportMonksClient;
 use Illuminate\Http\JsonResponse;
@@ -29,14 +31,14 @@ class DashboardController extends Controller
 
         return response()->json(['data' => [
             'stats' => [
-                $this->stat('Published stories', Article::query()->visible()->count(), 'Live on the public site', 'globe'),
-                $this->stat('Drafts and pending', Article::query()->whereIn('status', [Article::DRAFT, Article::PENDING])->count(), 'Not published yet', 'draft'),
-                $this->stat('Live matches', Fixture::query()->where('is_live', true)->count(), 'Being played right now', 'article'),
-                $this->stat('Upcoming matches', Fixture::query()->where('starting_at', '>', now())->count(), 'Scheduled to start', 'clock'),
-                $this->stat('Matches stored', $matches, 'Synced from SportMonks', 'folder'),
-                $this->stat('Categories', Category::query()->count(), 'News categories', 'folder'),
-                $this->stat('Authors', Writer::query()->count(), 'Credited on stories', 'users'),
-                $this->stat('Media assets', MediaAsset::query()->count(), 'Images in the library', 'image'),
+                $this->stat('Total articles', Article::query()->count(), 'All content in the CMS', 'article'),
+                $this->stat('Published', Article::query()->visible()->count(), 'Live on the public site', 'globe'),
+                $this->stat('Drafts', Article::query()->where('status', Article::DRAFT)->count(), 'In progress', 'draft'),
+                $this->stat('Pending approval', Article::query()->where('status', Article::PENDING)->count(), 'Awaiting review', 'clock'),
+                $this->stat('Categories', Category::query()->count(), 'Editorial taxonomy', 'folder'),
+                $this->stat('Authors', Writer::query()->count(), 'Published contributors', 'users'),
+                $this->stat('Media assets', MediaAsset::query()->count(), 'Images and thumbnails', 'image'),
+                $this->stat('Active staff', User::query()->count(), 'Administrator accounts', 'user'),
             ],
             'activity' => $this->activity(),
             'system' => $this->system($client, $matches, $players, $customisedPages),
@@ -116,19 +118,20 @@ class DashboardController extends Controller
         };
 
         return [
-            ['name' => 'SportMonks API', 'detail' => $sportMonksDetail, 'status' => $sportMonksStatus, 'icon' => 'plug'],
             [
-                'name' => 'Match data',
-                'detail' => $matches > 0 ? number_format($matches).' matches and '.number_format($players).' players stored' : 'No matches stored yet',
-                'status' => $matches > 0 ? 'Connected' : 'Degraded',
-                'icon' => 'storage',
+                'name' => 'SportMonks API',
+                'detail' => $sportMonksDetail.($matches > 0 ? ' · '.number_format($matches).' matches, '.number_format($players).' players' : ''),
+                'status' => $sportMonksStatus,
+                'icon' => 'plug',
             ],
+            ['name' => 'Media storage', 'detail' => number_format(MediaAsset::query()->count()).' assets stored in the library', 'status' => 'Connected', 'icon' => 'storage'],
             [
-                'name' => 'Legal pages',
-                'detail' => $customisedPages.' of '.count(SitePage::SLUGS).' pages customised, the rest use the built-in text',
+                'name' => 'Public website',
+                'detail' => number_format(Article::query()->visible()->count()).' published stories · '.$customisedPages.' of '.count(SitePage::SLUGS).' legal pages customised',
                 'status' => 'Connected',
                 'icon' => 'globe',
             ],
+            ['name' => 'Advertising', 'detail' => number_format(Advertisement::query()->running()->count()).' campaigns running on the website', 'status' => 'Connected', 'icon' => 'card'],
         ];
     }
 }

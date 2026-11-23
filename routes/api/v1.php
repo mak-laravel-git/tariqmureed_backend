@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\V1\PlayerController;
 use App\Http\Controllers\Api\V1\SeriesController;
 use App\Http\Controllers\Api\V1\SiteSettingsController;
 use App\Http\Controllers\Api\V1\TeamController;
+use App\Http\Controllers\Api\V1\TickerController;
 use App\Http\Controllers\Api\V1\WriterController;
 use Illuminate\Support\Facades\Route;
 
@@ -94,6 +95,7 @@ Route::get('writers', [WriterController::class, 'index'])->name('writers.index')
 Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
 
 Route::get('ads', AdController::class)->name('ads');
+Route::get('ticker', TickerController::class)->name('ticker');
 
 Route::get('settings', SiteSettingsController::class)->name('settings.show');
 Route::get('pages/{slug}', [PageController::class, 'show'])->name('pages.show');
@@ -116,6 +118,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
     Route::get('roles/permissions', [AdminRoleController::class, 'permissions'])->middleware('can:roles.view')->name('roles.permissions');
     Route::put('roles/{role}/permissions', [AdminRoleController::class, 'update'])->middleware('can:roles.edit')->name('roles.update');
 
+    Route::get('articles/tags', [AdminArticleController::class, 'tags'])->middleware('can:articles.index')->name('articles.tags');
     Route::get('advertisements/placements', [AdminAdvertisementController::class, 'placements'])->middleware('can:advertisements.index')->name('advertisements.placements');
 
     // Modules that share the common admin table and form: path => [controller, permission prefix].

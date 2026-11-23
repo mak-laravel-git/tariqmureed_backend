@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\RoleEnum;
-use App\Models\Fixture;
+use App\Models\Article;
 use App\Models\SyncRun;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -32,8 +32,9 @@ it('requires a token and the dashboard permission', function () {
 it('shows real counts, recent syncs and system status to an admin', function () {
     config(['sportmonks.token' => 'secret-token-123']);
 
-    Fixture::factory()->count(2)->create();
-    Fixture::factory()->create(['is_live' => true, 'status' => '1st Innings', 'starting_at' => now()->subHour()]);
+    Article::factory()->create();
+    Article::factory()->draft()->create();
+    Article::factory()->create(['status' => Article::PENDING, 'published_at' => null]);
     SyncRun::factory()->create(['records_synced' => 42]);
 
     actingAsDashboardUser(RoleEnum::ADMIN);
@@ -41,11 +42,14 @@ it('shows real counts, recent syncs and system status to an admin', function () 
     $data = $this->getJson('/api/v1/admin/dashboard')->assertOk()->json('data');
     $stats = collect($data['stats'])->pluck('value', 'label');
 
-    expect($stats['Live matches'])->toBe('1')
-        ->and($stats['Upcoming matches'])->toBe('2')
-        ->and($stats['Matches stored'])->toBe('3')
+    expect($stats->keys()->all())->toBe(['Total articles', 'Published', 'Drafts', 'Pending approval', 'Categories', 'Authors', 'Media assets', 'Active staff'])
+        ->and($stats['Total articles'])->toBe('3')
+        ->and($stats['Published'])->toBe('1')
+        ->and($stats['Drafts'])->toBe('1')
+        ->and($stats['Pending approval'])->toBe('1')
         ->and(collect($data['activity'])->firstWhere('actor', 'SportMonks sync'))->toMatchArray(['action' => 'completed', 'target' => 'Fixtures & results · 42 records'])
-        ->and(collect($data['system'])->firstWhere('name', 'SportMonks API')['status'])->toBe('Connected');
+        ->and(collect($data['system'])->firstWhere('name', 'SportMonks API')['status'])->toBe('Connected')
+        ->and(array_column($data['system'], 'name'))->toBe(['SportMonks API', 'Media storage', 'Public website', 'Advertising']);
 });
 
 it('reports the SportMonks connection as offline without a token', function () {

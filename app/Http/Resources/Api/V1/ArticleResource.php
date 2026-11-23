@@ -36,8 +36,8 @@ class ArticleResource extends JsonResource
             ],
             'publishedAt' => $this->published_at?->toIso8601String(),
             'readMinutes' => max(1, (int) ceil(str_word_count(strip_tags((string) $this->body)) / 220)),
-            'caption' => null,
-            'credit' => null,
+            'caption' => $this->image_caption ?: null,
+            'credit' => $this->image_credit ?: null,
         ];
     }
 }

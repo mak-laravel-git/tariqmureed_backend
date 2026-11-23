@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Writer;
 use App\Support\EditorialTime;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -48,7 +49,40 @@ class ArticleController extends ResourceController
             'publishAt' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'image' => ['nullable', 'string', 'max:500'],
+            'slug' => ['nullable', 'string', 'max:190', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('articles', 'slug')->ignore($request->route('id'))],
+            'imageCaption' => ['nullable', 'string', 'max:250'],
+            'imageCredit' => ['nullable', 'string', 'max:150'],
+            'socialImage' => ['nullable', 'string', 'max:500'],
+            'seoTitle' => ['nullable', 'string', 'max:120'],
+            'seoDescription' => ['nullable', 'string', 'max:300'],
+            'isFeatured' => ['nullable', 'boolean'],
+            'isBreaking' => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function messages(): array
+    {
+        return ['slug.regex' => 'The URL slug can only hold lowercase letters, numbers and hyphens.', 'slug.unique' => 'Another article already uses this URL slug.'];
+    }
+
+    /**
+     * Every tag already used on an article, for the tag chips of the editor.
+     */
+    public function tags(): JsonResponse
+    {
+        $tags = Article::query()->whereNotNull('tags')->pluck('tags')
+            ->flatMap(fn (string $line): array => array_map('trim', explode(',', $line)))
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->take(30)
+            ->values();
+
+        return response()->json(['data' => $tags]);
     }
 
     protected function save(Model $model, array $data): void
@@ -70,9 +104,18 @@ class ArticleController extends ResourceController
             'publish_at' => EditorialTime::toStored($data['publishAt'] ?? null),
             'notes' => $data['notes'] ?? null,
             'image' => ($data['image'] ?? '') !== '' ? $data['image'] : null,
+            'image_caption' => $data['imageCaption'] ?? null,
+            'image_credit' => $data['imageCredit'] ?? null,
+            'social_image' => $data['socialImage'] ?? null,
+            'seo_title' => $data['seoTitle'] ?? null,
+            'seo_description' => $data['seoDescription'] ?? null,
+            'is_featured' => (bool) ($data['isFeatured'] ?? false),
+            'is_breaking' => (bool) ($data['isBreaking'] ?? false),
         ]);
 
-        if (! $model->exists) {
+        if (filled($data['slug'] ?? null)) {
+            $model->slug = $data['slug'];
+        } elseif (! $model->exists) {
             $model->slug = Article::uniqueSlug($data['title']);
         }
 
@@ -95,6 +138,14 @@ class ArticleController extends ResourceController
             'tags' => $model->tags,
             'publishAt' => EditorialTime::toInput($model->publish_at),
             'image' => $model->image,
+            'slug' => $model->slug,
+            'imageCaption' => $model->image_caption,
+            'imageCredit' => $model->image_credit,
+            'socialImage' => $model->social_image,
+            'seoTitle' => $model->seo_title,
+            'seoDescription' => $model->seo_description,
+            'isFeatured' => $model->is_featured,
+            'isBreaking' => $model->is_breaking,
         ];
     }
 }
