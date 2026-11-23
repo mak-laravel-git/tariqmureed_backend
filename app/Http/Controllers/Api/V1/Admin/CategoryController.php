@@ -63,6 +63,7 @@ class CategoryController extends ResourceController
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->notes,
+            'thumbnail' => $model->articles()->whereNotNull('image')->where('image', '!=', '')->latest('publish_at')->value('image'),
         ];
     }
 }

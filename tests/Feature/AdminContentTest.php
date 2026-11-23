@@ -189,6 +189,18 @@ it('manages categories, authors and advertisements', function () {
     $this->deleteJson("/api/v1/admin/categories/{$category}")->assertNoContent();
 });
 
+it('shows a thumbnail beside categories, authors and articles', function () {
+    signInForContent();
+
+    $category = Category::factory()->create();
+    $writer = Writer::factory()->create(['avatar' => '/images/writers/nadia.jpg']);
+    Article::factory()->create(['category_id' => $category->id, 'writer_id' => $writer->id, 'image' => 'https://cdn.example.com/cover.jpg', 'status' => 'Published']);
+
+    $this->getJson('/api/v1/admin/categories')->assertOk()->assertJsonPath('data.0.thumbnail', 'https://cdn.example.com/cover.jpg');
+    $this->getJson('/api/v1/admin/writers')->assertOk()->assertJsonPath('data.0.thumbnail', '/images/writers/nadia.jpg');
+    $this->getJson('/api/v1/admin/articles')->assertOk()->assertJsonPath('data.0.thumbnail', 'https://cdn.example.com/cover.jpg');
+});
+
 it('uploads and deletes an image', function () {
     Storage::fake('public');
     signInForContent();

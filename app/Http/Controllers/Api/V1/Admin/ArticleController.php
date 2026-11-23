@@ -133,6 +133,7 @@ class ArticleController extends ResourceController
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->notes,
+            'thumbnail' => $model->image ?: null,
             'summary' => $model->summary,
             'body' => $model->body,
             'tags' => $model->tags,

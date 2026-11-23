@@ -64,6 +64,7 @@ class WriterController extends ResourceController
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->bio,
+            'thumbnail' => $model->avatar ?: null,
         ];
     }
 }
