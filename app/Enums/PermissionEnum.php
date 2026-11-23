@@ -29,6 +29,9 @@ enum PermissionEnum: string
     // PERMISSIONS (developer-defined, read-only)
     case PERMISSIONS_INDEX = 'permissions.index';
 
+    // DASHBOARD (admin overview page)
+    case DASHBOARD_VIEW = 'dashboard.view';
+
     // INTEGRATIONS (SportMonks status page and manual sync)
     case INTEGRATIONS_VIEW = 'integrations.view';
     case INTEGRATIONS_SYNC = 'integrations.sync';

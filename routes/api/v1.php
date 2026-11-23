@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\CompetitionController as AdminCompetitionController;
+use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
+use App\Http\Controllers\Api\V1\Admin\ProfileController as AdminProfileController;
+use App\Http\Controllers\Api\V1\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SportMonksIntegrationController;
+use App\Http\Controllers\Api\V1\Admin\StaffController as AdminStaffController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CompetitionController;
 use App\Http\Controllers\Api\V1\MatchController;
@@ -73,6 +78,25 @@ Route::get('pages/{slug}', [PageController::class, 'show'])->name('pages.show');
 
 // ── Admin dashboard API (the Next.js admin calls /api/v1/admin/...) ──────────
 Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(function () {
+    Route::get('dashboard', AdminDashboardController::class)->middleware('can:dashboard.view')->name('dashboard');
+
+    // The signed-in administrator's own account: no permission needed.
+    Route::put('profile', [AdminProfileController::class, 'update'])->name('profile.update');
+    Route::put('profile/password', [AdminProfileController::class, 'password'])->middleware('throttle:auth')->name('profile.password');
+
+    Route::prefix('staff')->name('staff.')->controller(AdminStaffController::class)->group(function () {
+        Route::get('/', 'index')->middleware('can:users.index')->name('index');
+        Route::get('{id}', 'show')->middleware('can:users.view')->name('show');
+        Route::put('{id}', 'update')->middleware('can:users.edit')->name('update');
+        Route::delete('{id}', 'destroy')->middleware('can:users.delete')->name('destroy');
+    });
+
+    Route::get('roles/permissions', [AdminRoleController::class, 'permissions'])->middleware('can:roles.view')->name('roles.permissions');
+    Route::put('roles/{role}/permissions', [AdminRoleController::class, 'update'])->middleware('can:roles.edit')->name('roles.update');
+
+    Route::get('competitions', [AdminCompetitionController::class, 'index'])->middleware('can:integrations.view')->name('competitions.index');
+    Route::get('competitions/{id}', [AdminCompetitionController::class, 'show'])->middleware('can:integrations.view')->name('competitions.show');
+
     Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
         ->controller(SportMonksIntegrationController::class)
         ->group(function () {
