@@ -27,11 +27,14 @@ class MediaController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $request->validate(['file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']]);
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+            'title' => ['nullable', 'string', 'max:150'],
+        ]);
 
         $file = $request->file('file');
         $asset = MediaAsset::query()->create([
-            'title' => Str::limit(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 140, ''),
+            'title' => $request->filled('title') ? trim($request->string('title')->toString()) : Str::limit(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 140, ''),
             'path' => $file->store('media', 'public'),
             'mime' => (string) $file->getMimeType(),
             'size' => $file->getSize(),

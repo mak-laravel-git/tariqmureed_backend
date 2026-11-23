@@ -206,6 +206,15 @@ it('uploads and deletes an image', function () {
     Storage::disk('public')->assertMissing($asset->path);
 });
 
+it('names an uploaded image with the title the editor typed', function () {
+    Storage::fake('public');
+    signInForContent();
+
+    $this->postJson('/api/v1/admin/media', ['file' => UploadedFile::fake()->image('IMG_0001.png'), 'title' => 'Dhaka stadium at night'])
+        ->assertCreated()
+        ->assertJsonPath('data.title', 'Dhaka stadium at night');
+});
+
 it('rejects files that are not images', function () {
     Storage::fake('public');
     signInForContent();
