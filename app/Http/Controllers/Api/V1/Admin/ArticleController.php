@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Models\Article;
 use App\Models\Category;
 use App\Models\Writer;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Validation\Rule;
 
 /**
@@ -66,7 +68,7 @@ class ArticleController extends ResourceController
             'summary' => $data['summary'] ?? null,
             'body' => $data['body'] ?? null,
             'tags' => $data['tags'] ?? null,
-            'publish_at' => $data['publishAt'] ?? null,
+            'publish_at' => $this->toStoredTime($data['publishAt'] ?? null),
             'notes' => $data['notes'] ?? null,
             'image' => ($data['image'] ?? '') !== '' ? $data['image'] : null,
         ]);
@@ -77,6 +79,24 @@ class ArticleController extends ResourceController
 
         $model->syncPublishedAt();
         $model->save();
+    }
+
+    /**
+     * The timezone editors type publish dates in (the same one match times are shown in).
+     */
+    private function editorialTimezone(): string
+    {
+        return (string) config('sportmonks.display_timezone');
+    }
+
+    /**
+     * A publish date typed in the editorial timezone, converted to the application's storage timezone.
+     */
+    private function toStoredTime(?string $typed): ?CarbonInterface
+    {
+        return filled($typed)
+            ? Date::parse($typed, $this->editorialTimezone())->setTimezone((string) config('app.timezone'))
+            : null;
     }
 
     protected function record(Model $model): array
@@ -92,7 +112,7 @@ class ArticleController extends ResourceController
             'summary' => $model->summary,
             'body' => $model->body,
             'tags' => $model->tags,
-            'publishAt' => $model->publish_at?->format('Y-m-d\TH:i'),
+            'publishAt' => $model->publish_at?->setTimezone($this->editorialTimezone())->format('Y-m-d\TH:i'),
             'image' => $model->image,
         ];
     }

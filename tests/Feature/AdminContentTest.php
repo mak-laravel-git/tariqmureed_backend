@@ -138,6 +138,33 @@ it('searches, filters and edits articles from the admin table', function () {
     $this->assertModelMissing($draft);
 });
 
+it('reads the publish date in the site timezone, so a story dated now goes live now', function () {
+    config(['sportmonks.display_timezone' => 'Asia/Dhaka', 'app.timezone' => 'UTC']);
+    $this->travelTo(now()->setTime(5, 40));
+    signInForContent();
+
+    // 11:30 in Dhaka is 05:30 UTC, ten minutes ago.
+    $id = $this->postJson('/api/v1/admin/articles', ['title' => 'Typed in Dhaka time', 'status' => 'Published', 'publishAt' => now()->setTime(11, 30)->format('Y-m-d\TH:i')])
+        ->assertCreated()
+        ->assertJsonPath('data.publishAt', now()->setTime(11, 30)->format('Y-m-d\TH:i'))
+        ->json('data.id');
+
+    expect(Article::query()->visible()->whereKey($id)->exists())->toBeTrue();
+});
+
+it('hides a story dated in the future until that time, and publishes it when the date is cleared', function () {
+    config(['sportmonks.display_timezone' => 'Asia/Dhaka']);
+    $this->travelTo(now()->setTime(5, 40));
+    signInForContent();
+
+    $id = $this->postJson('/api/v1/admin/articles', ['title' => 'Later today', 'status' => 'Published', 'publishAt' => now()->setTime(16, 30)->format('Y-m-d\TH:i')])
+        ->assertCreated()->json('data.id');
+    expect(Article::query()->visible()->whereKey($id)->exists())->toBeFalse();
+
+    $this->putJson("/api/v1/admin/articles/{$id}", ['title' => 'Later today', 'status' => 'Published', 'publishAt' => ''])->assertOk();
+    expect(Article::query()->visible()->whereKey($id)->exists())->toBeTrue();
+});
+
 it('rejects an article with an unknown status', function () {
     signInForContent();
 

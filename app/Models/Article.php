@@ -53,7 +53,7 @@ class Article extends Model
     public function syncPublishedAt(): void
     {
         $this->published_at = match ($this->status) {
-            self::PUBLISHED => $this->publish_at ?? $this->published_at ?? now(),
+            self::PUBLISHED => $this->publish_at ?? ($this->published_at?->isPast() ? $this->published_at : now()),
             self::SCHEDULED => $this->publish_at ?? now(),
             default => null,
         };
