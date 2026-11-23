@@ -42,14 +42,16 @@ COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 # Supervisor keeps `php artisan schedule:work` running (SportMonks auto sync). It is registered as an
 # s6-overlay service, so the image init starts it next to nginx and php-fpm and the container's
 # health follows the same rules as before. No Coolify "Scheduled Task" is needed any more.
+# Register it in user-bundles.d (not s6-rc.d/user): the old path breaks init, nginx never starts.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends supervisor \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /etc/s6-overlay/s6-rc.d/supervisord/dependencies.d /etc/s6-overlay/s6-rc.d/user/contents.d /etc/supervisor \
+    && mkdir -p /etc/s6-overlay/s6-rc.d/supervisord/dependencies.d /etc/supervisor \
+    && touch /etc/s6-overlay/s6-rc.d/supervisord/dependencies.d/base \
     && echo longrun > /etc/s6-overlay/s6-rc.d/supervisord/type \
     && printf '#!/command/with-contenv sh\nexec supervisord --nodaemon --configuration /etc/supervisor/supervisord.conf\n' > /etc/s6-overlay/s6-rc.d/supervisord/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/supervisord/run \
-    && touch /etc/s6-overlay/s6-rc.d/user/contents.d/supervisord
+    && touch /etc/s6-overlay/user-bundles.d/user/contents.d/supervisord
 
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 
