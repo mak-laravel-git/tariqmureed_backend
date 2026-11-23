@@ -34,6 +34,7 @@ class CategoryController extends ResourceController
             'subtitle' => ['nullable', 'string', 'max:255'],
             'status' => ['required', 'string', 'max:20'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'image' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -44,6 +45,7 @@ class CategoryController extends ResourceController
             'description' => $data['subtitle'] ?? null,
             'status' => $data['status'],
             'notes' => $data['notes'] ?? null,
+            'image' => $data['image'] ?? null,
         ]);
 
         if (! $model->exists) {
@@ -63,7 +65,8 @@ class CategoryController extends ResourceController
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->notes,
-            'thumbnail' => $model->articles()->whereNotNull('image')->where('image', '!=', '')->latest('publish_at')->value('image'),
+            'image' => $model->image,
+            'thumbnail' => $model->image ?: $model->articles()->whereNotNull('image')->where('image', '!=', '')->latest('publish_at')->value('image'),
         ];
     }
 }

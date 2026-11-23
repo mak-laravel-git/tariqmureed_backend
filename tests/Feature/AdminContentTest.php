@@ -201,6 +201,18 @@ it('shows a thumbnail beside categories, authors and articles', function () {
     $this->getJson('/api/v1/admin/articles')->assertOk()->assertJsonPath('data.0.thumbnail', 'https://cdn.example.com/cover.jpg');
 });
 
+it('saves a picture when creating categories and authors', function () {
+    signInForContent();
+
+    $category = $this->postJson('/api/v1/admin/categories', ['title' => 'Hockey', 'status' => 'Active', 'image' => 'https://cdn.example.com/hockey.jpg'])
+        ->assertCreated()->assertJsonPath('data.image', 'https://cdn.example.com/hockey.jpg')->assertJsonPath('data.thumbnail', 'https://cdn.example.com/hockey.jpg')->json('data.id');
+    $this->putJson("/api/v1/admin/categories/{$category}", ['title' => 'Hockey', 'status' => 'Active', 'image' => ''])->assertOk()->assertJsonPath('data.image', null);
+
+    $this->postJson('/api/v1/admin/writers', ['title' => 'Sara Khan', 'status' => 'Active', 'image' => '/images/writers/sara.jpg'])
+        ->assertCreated()->assertJsonPath('data.image', '/images/writers/sara.jpg')->assertJsonPath('data.thumbnail', '/images/writers/sara.jpg');
+    expect(Writer::query()->where('name', 'Sara Khan')->value('avatar'))->toBe('/images/writers/sara.jpg');
+});
+
 it('uploads and deletes an image', function () {
     Storage::fake('public');
     signInForContent();

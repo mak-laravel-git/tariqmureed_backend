@@ -34,6 +34,7 @@ class WriterController extends ResourceController
             'owner' => ['nullable', 'string', 'max:120'],
             'status' => ['required', 'string', 'max:20'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'image' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -45,6 +46,7 @@ class WriterController extends ResourceController
             'desk' => $data['owner'] ?? null,
             'status' => $data['status'],
             'bio' => $data['notes'] ?? null,
+            'avatar' => $data['image'] ?? null,
         ]);
 
         if (! $model->exists) {
@@ -64,6 +66,7 @@ class WriterController extends ResourceController
             'status' => $model->status,
             'updatedAt' => $model->updated_at->diffForHumans(),
             'notes' => $model->bio,
+            'image' => $model->avatar,
             'thumbnail' => $model->avatar ?: null,
         ];
     }
