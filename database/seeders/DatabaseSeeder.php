@@ -18,7 +18,9 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             RoleSeeder::class,
             UserSeeder::class,
+            MediaLibrarySeeder::class,
             ContentSeeder::class,
+            WordPressArticleSeeder::class,
         ]);
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
     }

@@ -5,6 +5,7 @@ use App\Models\Article;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
+use Database\Seeders\WordPressArticleSeeder;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -105,4 +106,38 @@ it('lists the tags already used', function () {
     Article::factory()->create(['tags' => 'IPL 2026']);
 
     $this->getJson('/api/v1/admin/articles/tags')->assertOk()->assertJsonPath('data.0', 'IPL 2026')->assertJsonCount(2, 'data');
+});
+
+it('keeps a gallery of several images on a story and serves it on the public page', function () {
+    signInAsEditor();
+
+    $id = $this->postJson('/api/v1/admin/articles', [
+        'title' => 'Photo Essay',
+        'status' => 'Published',
+        'gallery' => ['https://cdn.example.com/a.jpg', ' https://cdn.example.com/b.jpg ', 'https://cdn.example.com/a.jpg', ''],
+    ])->assertCreated()->assertJsonPath('data.gallery', ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg'])->json('data.id');
+
+    $slug = Article::query()->findOrFail($id)->slug;
+    $this->getJson("/api/v1/articles/{$slug}")->assertOk()->assertJsonPath('data.gallery', ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg']);
+
+    $this->putJson("/api/v1/admin/articles/{$id}", ['title' => 'Photo Essay', 'status' => 'Published', 'gallery' => []])
+        ->assertOk()->assertJsonPath('data.gallery', []);
+});
+
+it('imports the old WordPress stories without overwriting edits and can run twice', function () {
+    $this->seed(WordPressArticleSeeder::class);
+
+    expect(Article::query()->count())->toBe(21)
+        ->and(Article::query()->visible()->count())->toBe(21)
+        ->and(Article::query()->whereNull('image')->count())->toBe(0);
+
+    $story = Article::query()->where('slug', 'icc-t20-league-rules-ilt20-mlc')->firstOrFail();
+    $story->update(['title' => 'Edited in the dashboard']);
+
+    $this->seed(WordPressArticleSeeder::class);
+
+    expect(Article::query()->count())->toBe(21)
+        ->and($story->fresh()->title)->toBe('Edited in the dashboard');
+
+    $this->getJson('/api/v1/articles/icc-t20-league-rules-ilt20-mlc')->assertOk()->assertJsonFragment(['type' => 'lead'])->assertJsonFragment(['type' => 'image']);
 });

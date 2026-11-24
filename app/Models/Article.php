@@ -31,6 +31,7 @@ class Article extends Model
         return [
             'publish_at' => 'datetime',
             'published_at' => 'datetime',
+            'gallery' => 'array',
         ];
     }
 

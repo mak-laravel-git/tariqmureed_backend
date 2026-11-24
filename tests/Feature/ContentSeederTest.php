@@ -2,6 +2,7 @@
 
 use App\Models\Article;
 use App\Models\Category;
+use App\Models\MediaAsset;
 use App\Models\Writer;
 use Database\Seeders\ContentSeeder;
 
@@ -10,7 +11,11 @@ it('fills the news pages with sample stories, authors and categories', function 
 
     expect(Article::query()->visible()->count())->toBe(18)
         ->and(Writer::query()->count())->toBe(8)
-        ->and(Category::query()->where('name', 'Domestic')->exists())->toBeTrue();
+        ->and(Category::query()->where('name', 'Domestic')->exists())->toBeTrue()
+        ->and(MediaAsset::query()->count())->toBeGreaterThan(0)
+        ->and(Article::query()->where('image', 'like', '%/storage/media/seeded/%')->count())->toBe(18)
+        ->and(Writer::query()->whereNotNull('avatar')->where('avatar', 'like', '%/storage/media/seeded/%')->count())->toBe(6)
+        ->and(Category::query()->whereNotNull('image')->where('image', 'like', '%/storage/media/seeded/%')->count())->toBeGreaterThan(0);
 
     $this->getJson('/api/v1/articles/featured')->assertOk()->assertJsonPath('data.lead.category', 'IPL 2026')->assertJsonCount(4, 'data.side');
     $this->getJson('/api/v1/articles/most-read')->assertOk()->assertJsonCount(5, 'data');

@@ -10,9 +10,10 @@ use Illuminate\Database\Seeder;
 /**
  * Sample categories, authors and stories, so the public news pages are never empty.
  *
- * Safe to run again: anything that already exists (matched by name or slug) is left exactly as the
- * editors changed it. Every sample story says so in its internal notes, so it is easy to find and
- * replace with real reporting from the admin dashboard.
+ * Pictures are taken from the media library (MediaLibrarySeeder runs first). Safe to run again:
+ * anything that already exists (matched by name or slug) is left exactly as the editors changed it.
+ * Every sample story says so in its internal notes, so it is easy to find and replace with real
+ * reporting from the admin dashboard.
  */
 class ContentSeeder extends Seeder
 {
@@ -29,6 +30,22 @@ class ContentSeeder extends Seeder
         ['name' => 'Ayaan Rahman', 'slug' => 'ayaan-rahman', 'title' => 'Cricket Analyst', 'bio' => 'Ayaan writes about tactics and the way modern teams are changing how the game is played.', 'avatar' => '', 'since' => 2022],
         ['name' => 'TMN Desk', 'slug' => 'tmn-desk', 'title' => 'Newsroom', 'bio' => 'Stories written by the TMN Sport newsroom.', 'avatar' => '', 'since' => 2016],
     ];
+
+    /**
+     * @return list<string>
+     */
+    public static function writerAvatars(): array
+    {
+        return array_column(self::WRITERS, 'avatar');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function storyImages(): array
+    {
+        return array_values(array_unique(array_column(self::STORIES, 3)));
+    }
 
     /**
      * Stories: slug, title, summary, image, category, writer slug, minutes since publishing, views.
@@ -61,30 +78,57 @@ class ContentSeeder extends Seeder
 
     public function run(): void
     {
+        $this->call(MediaLibrarySeeder::class);
+
+        /** @var array<string, string> $categoryImages first story image per category name */
+        $categoryImages = [];
+
+        foreach (self::STORIES as [,,, $image, $category]) {
+            $categoryImages[$category] ??= MediaLibrarySeeder::url($image);
+        }
+
         foreach (self::WRITERS as $writer) {
-            Writer::query()->firstOrCreate(
+            $avatar = $writer['avatar'] !== '' ? MediaLibrarySeeder::url($writer['avatar']) : null;
+            $model = Writer::query()->firstOrCreate(
                 ['slug' => $writer['slug']],
                 [
                     'name' => $writer['name'],
                     'title' => $writer['title'],
                     'desk' => 'Cricket desk',
                     'bio' => $writer['bio'],
-                    'avatar' => $writer['avatar'] !== '' ? $writer['avatar'] : null,
+                    'avatar' => $avatar,
                     'status' => 'Active',
                     'created_at' => "{$writer['since']}-01-01 00:00:00",
                 ],
             );
+
+            if ($avatar && ($model->avatar === null || str_starts_with((string) $model->avatar, '/images/'))) {
+                $model->update(['avatar' => $avatar]);
+            }
         }
 
         foreach ([...array_unique(array_column(self::STORIES, 4)), ...self::EXTRA_CATEGORIES] as $name) {
-            Category::query()->firstOrCreate(['name' => $name], ['slug' => Category::uniqueSlug($name), 'status' => 'Active']);
+            $image = $categoryImages[$name] ?? $categoryImages['International'] ?? null;
+            $model = Category::query()->firstOrCreate(
+                ['name' => $name],
+                [
+                    'slug' => Category::uniqueSlug($name),
+                    'status' => 'Active',
+                    'image' => $image,
+                ],
+            );
+
+            if ($image && ($model->image === null || str_starts_with((string) $model->image, '/images/'))) {
+                $model->update(['image' => $image]);
+            }
         }
 
         $writers = Writer::query()->pluck('id', 'slug');
         $categories = Category::query()->pluck('id', 'name');
 
         foreach (self::STORIES as [$slug, $title, $summary, $image, $category, $writer, $minutesAgo, $views]) {
-            Article::query()->firstOrCreate(
+            $mediaUrl = MediaLibrarySeeder::url($image);
+            $model = Article::query()->firstOrCreate(
                 ['slug' => $slug],
                 [
                     'title' => $title,
@@ -92,7 +136,7 @@ class ContentSeeder extends Seeder
                     'body' => $this->body($slug, $summary),
                     'category_id' => $categories[$category],
                     'writer_id' => $writers[$writer],
-                    'image' => $image,
+                    'image' => $mediaUrl,
                     'tags' => $category,
                     'status' => Article::PUBLISHED,
                     'published_at' => now()->subMinutes($minutesAgo),
@@ -100,6 +144,10 @@ class ContentSeeder extends Seeder
                     'notes' => self::NOTE,
                 ],
             );
+
+            if ($model->image === null || str_starts_with((string) $model->image, '/images/')) {
+                $model->update(['image' => $mediaUrl]);
+            }
         }
     }
 
@@ -122,7 +170,7 @@ class ContentSeeder extends Seeder
         }
 
         return implode("\n\n", [
-            rtrim($summary, '.').'.',
+            rtrim($summary, '.') . '.',
             'This is a sample story that keeps the news pages full until your own reporting is published. Replace this text from the Content Management section of the admin dashboard.',
             '## Why it matters',
             'Write the key facts, the context and the numbers here, one idea per paragraph, with a blank line between paragraphs.',
