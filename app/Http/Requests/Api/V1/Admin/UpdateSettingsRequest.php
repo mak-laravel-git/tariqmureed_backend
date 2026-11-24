@@ -30,6 +30,13 @@ class UpdateSettingsRequest extends FormRequest
             'gaMeasurementId' => ['sometimes', 'nullable', 'regex:/^G-[A-Z0-9]{4,20}$/'],
             'adsenseClientId' => ['sometimes', 'nullable', 'regex:/^ca-pub-\d{10,20}$/'],
             'consentMode' => ['sometimes', 'required', Rule::in(['builtin', 'google'])],
+            'seoSiteUrl' => ['sometimes', 'nullable', 'url:http,https', 'max:190'],
+            'seoTitleTemplate' => ['sometimes', 'required', 'string', 'max:100', 'regex:/%s/'],
+            'seoDefaultImage' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'seoTwitterHandle' => ['sometimes', 'nullable', 'regex:/^@?[A-Za-z0-9_]{1,15}$/'],
+            'seoIndexing' => ['sometimes', 'boolean'],
+            'seoGoogleVerification' => ['sometimes', 'nullable', 'regex:/^[A-Za-z0-9_-]{10,120}$/'],
+            'seoBingVerification' => ['sometimes', 'nullable', 'regex:/^[A-Za-z0-9_-]{10,120}$/'],
         ];
     }
 
@@ -40,6 +47,11 @@ class UpdateSettingsRequest extends FormRequest
     {
         return [
             'gaMeasurementId.regex' => 'The Google Analytics Measurement ID must look like G-XXXXXXXXXX.',
+            'seoSiteUrl.url' => 'The website address must start with https:// (for example https://tmnsport.com).',
+            'seoTitleTemplate.regex' => 'The title format must contain %s, where the page title goes (for example %s | TMN Sport).',
+            'seoTwitterHandle.regex' => 'The X (Twitter) handle looks like @tmnsport.',
+            'seoGoogleVerification.regex' => 'Paste only the verification code, not the whole meta tag.',
+            'seoBingVerification.regex' => 'Paste only the verification code, not the whole meta tag.',
             'adsenseClientId.regex' => 'The AdSense publisher ID must look like ca-pub-1234567890123456.',
         ];
     }

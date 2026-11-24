@@ -55,6 +55,13 @@ it('serves default public settings before anything is saved', function () {
             'gaMeasurementId' => '',
             'adsenseClientId' => '',
             'consentMode' => 'builtin',
+            'seoSiteUrl' => '',
+            'seoTitleTemplate' => '%s | TMN Sport',
+            'seoDefaultImage' => '',
+            'seoTwitterHandle' => '',
+            'seoIndexing' => true,
+            'seoGoogleVerification' => '',
+            'seoBingVerification' => '',
         ]]);
 });
 

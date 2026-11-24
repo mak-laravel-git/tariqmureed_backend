@@ -59,6 +59,7 @@ class ArticleController extends ResourceController
             'seoDescription' => ['nullable', 'string', 'max:300'],
             'isFeatured' => ['nullable', 'boolean'],
             'isBreaking' => ['nullable', 'boolean'],
+            'noindex' => ['nullable', 'boolean'],
         ];
     }
 
@@ -114,6 +115,7 @@ class ArticleController extends ResourceController
             'seo_description' => $data['seoDescription'] ?? null,
             'is_featured' => (bool) ($data['isFeatured'] ?? false),
             'is_breaking' => (bool) ($data['isBreaking'] ?? false),
+            'noindex' => (bool) ($data['noindex'] ?? false),
         ]);
 
         if (filled($data['slug'] ?? null)) {
@@ -151,6 +153,7 @@ class ArticleController extends ResourceController
             'seoDescription' => $model->seo_description,
             'isFeatured' => $model->is_featured,
             'isBreaking' => $model->is_breaking,
+            'noindex' => $model->noindex,
         ];
     }
 }

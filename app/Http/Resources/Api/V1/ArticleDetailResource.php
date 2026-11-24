@@ -35,6 +35,7 @@ class ArticleDetailResource extends ArticleResource
             'seoTitle' => $this->seo_title ?: null,
             'seoDescription' => $this->seo_description ?: null,
             'socialImage' => $this->social_image ?: null,
+            'noindex' => (bool) $this->noindex,
             'gallery' => array_values($this->gallery ?? []),
             'tags' => collect(explode(',', (string) $this->tags))->map(fn (string $tag): string => trim($tag))->filter()->values()->all(),
             'related' => ArticleResource::collection($related)->resolve($request),

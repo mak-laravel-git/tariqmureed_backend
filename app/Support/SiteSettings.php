@@ -25,11 +25,20 @@ final class SiteSettings
         'gaMeasurementId' => '',
         'adsenseClientId' => '',
         'consentMode' => 'builtin',
+        // Search engines and social sharing (admin "SEO" screen).
+        'seoSiteUrl' => '',
+        'seoTitleTemplate' => '%s | TMN Sport',
+        'seoDefaultImage' => '',
+        'seoTwitterHandle' => '',
+        'seoIndexing' => true,
+        'seoGoogleVerification' => '',
+        'seoBingVerification' => '',
     ];
 
     /** Settings the public website may read (identifiers and contact details are public anyway). */
     private const PUBLIC = [
         'websiteName', 'contactEmail', 'contactAddress', 'gaMeasurementId', 'adsenseClientId', 'consentMode',
+        'seoSiteUrl', 'seoTitleTemplate', 'seoDefaultImage', 'seoTwitterHandle', 'seoIndexing', 'seoGoogleVerification', 'seoBingVerification',
     ];
 
     /**

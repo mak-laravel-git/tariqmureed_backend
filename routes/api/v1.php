@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Admin\MediaController as AdminMediaController;
 use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\V1\Admin\ProfileController as AdminProfileController;
 use App\Http\Controllers\Api\V1\Admin\RoleController as AdminRoleController;
+use App\Http\Controllers\Api\V1\Admin\SeoController as AdminSeoController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController as AdminSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SportMonksIntegrationController;
 use App\Http\Controllers\Api\V1\Admin\StaffController as AdminStaffController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\V1\MatchdayController;
 use App\Http\Controllers\Api\V1\NewsController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PlayerController;
+use App\Http\Controllers\Api\V1\SeoController;
 use App\Http\Controllers\Api\V1\SeriesController;
 use App\Http\Controllers\Api\V1\SiteSettingsController;
 use App\Http\Controllers\Api\V1\TeamController;
@@ -98,6 +100,8 @@ Route::get('ads', AdController::class)->name('ads');
 Route::get('ticker', TickerController::class)->name('ticker');
 
 Route::get('settings', SiteSettingsController::class)->name('settings.show');
+Route::get('seo', [SeoController::class, 'show'])->name('seo.show');
+Route::get('sitemap', [SeoController::class, 'sitemap'])->name('sitemap');
 Route::get('pages/{slug}', [PageController::class, 'show'])->name('pages.show');
 
 // ── Admin dashboard API (the Next.js admin calls /api/v1/admin/...) ──────────
@@ -156,6 +160,9 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
 
     Route::get('settings', [AdminSettingsController::class, 'show'])->middleware('can:settings.view')->name('settings.show');
     Route::put('settings', [AdminSettingsController::class, 'update'])->middleware('can:settings.edit')->name('settings.update');
+
+    Route::get('seo', [AdminSeoController::class, 'show'])->middleware('can:settings.view')->name('seo.show');
+    Route::put('seo', [AdminSeoController::class, 'update'])->middleware('can:settings.edit')->name('seo.update');
 
     Route::prefix('pages')->name('pages.')->controller(AdminPageController::class)->group(function () {
         Route::get('/', 'index')->middleware('can:pages.view')->name('index');

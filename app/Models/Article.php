@@ -32,6 +32,7 @@ class Article extends Model
             'publish_at' => 'datetime',
             'published_at' => 'datetime',
             'gallery' => 'array',
+            'noindex' => 'boolean',
         ];
     }
 
