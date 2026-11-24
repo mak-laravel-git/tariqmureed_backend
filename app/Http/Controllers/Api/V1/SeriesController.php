@@ -23,7 +23,10 @@ class SeriesController extends Controller
         $schedules = LeagueSchedules::all();
 
         $items = League::query()
+            ->where('is_featured', true)
             ->whereIn('id', $schedules->keys())
+            ->orderByRaw('sort_order is null')
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
             ->map(fn (League $league): array => [

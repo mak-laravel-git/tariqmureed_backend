@@ -31,6 +31,18 @@ it('stores leagues with their seasons and marks the current one', function () {
         ->and(Season::query()->findOrFail(5)->is_current)->toBeFalse();
 });
 
+it('keeps what the editor arranged when the leagues are synced again', function () {
+    League::factory()->create(['id' => 3, 'name' => 'Old Name', 'slug' => 'test-series', 'is_featured' => false, 'sort_order' => 7]);
+    Payloads::fake(['leagues' => ['data' => [Payloads::league()]]]);
+
+    app(SportMonksSyncer::class)->run(SyncTarget::LEAGUES);
+
+    $league = League::query()->findOrFail(3);
+    expect($league->name)->not->toBe('Old Name')
+        ->and($league->is_featured)->toBeFalse()
+        ->and($league->sort_order)->toBe(7);
+});
+
 it('only syncs the leagues listed in SPORTMONKS_LEAGUE_IDS', function () {
     config(['sportmonks.league_ids' => [9]]);
     Payloads::fake(['leagues' => ['data' => [Payloads::league(3), Payloads::league(9, 'Chosen Cup', 20)]]]);

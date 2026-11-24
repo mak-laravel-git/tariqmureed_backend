@@ -149,6 +149,8 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
     Route::get('activity-logs/{id}', [AdminActivityLogController::class, 'show'])->middleware('can:activity.index')->name('activity-logs.show');
 
     Route::get('competitions', [AdminCompetitionController::class, 'index'])->middleware('can:integrations.view')->name('competitions.index');
+    Route::get('competitions/arrangement', [AdminCompetitionController::class, 'arrangement'])->middleware('can:settings.view')->name('competitions.arrangement');
+    Route::put('competitions/arrangement', [AdminCompetitionController::class, 'arrange'])->middleware('can:settings.edit')->name('competitions.arrange');
     Route::get('competitions/{id}', [AdminCompetitionController::class, 'show'])->middleware('can:integrations.view')->name('competitions.show');
 
     Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')

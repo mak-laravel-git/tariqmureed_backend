@@ -17,6 +17,8 @@ class CompetitionController extends Controller
         return CompetitionRefResource::collection(
             League::query()
                 ->when($request->boolean('featured'), fn ($query) => $query->where('is_featured', true))
+                ->orderByRaw('sort_order is null')
+                ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
         );
@@ -31,6 +33,7 @@ class CompetitionController extends Controller
         $order = ['In progress' => 0, 'Upcoming' => 1, 'Completed' => 2];
 
         $items = League::query()
+            ->where('is_featured', true)
             ->whereIn('id', $schedules->keys())
             ->get()
             ->sortBy(fn (League $league): string => $order[$schedules[$league->id]['status']].$schedules[$league->id]['first']->format('YmdHis'))
