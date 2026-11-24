@@ -111,6 +111,39 @@ it('makes no livescores call while no match is scheduled around now', function (
     Http::assertNothingSent();
 });
 
+it('leaves no sync_runs row while nothing is live, so a 10 second schedule does not fill the table', function () {
+    Fixture::factory()->create(['starting_at' => now()->addDays(3)]);
+    Http::fake();
+
+    foreach (range(1, 5) as $unused) {
+        app(SportMonksSyncer::class)->run(SyncTarget::LIVE);
+    }
+
+    expect(SyncRun::query()->count())->toBe(0);
+});
+
+it('polls live scores for the configured window after a match was due to start', function () {
+    Fixture::factory()->create(['starting_at' => now()->subHours(8)]);
+    Payloads::fake(['livescores' => ['data' => []]]);
+
+    config(['sportmonks.live_window_hours' => 6]);
+    app(SportMonksSyncer::class)->run(SyncTarget::LIVE);
+    Http::assertNothingSent();
+
+    config(['sportmonks.live_window_hours' => 12]);
+    app(SportMonksSyncer::class)->run(SyncTarget::LIVE);
+    Http::assertSentCount(1);
+});
+
+it('keeps only a day of live runs', function () {
+    SyncRun::factory()->create(['target' => 'live', 'started_at' => now()->subDays(2)]);
+    SyncRun::factory()->create(['target' => 'live', 'started_at' => now()->subMinutes(5)]);
+    SyncRun::factory()->create(['target' => 'fixtures', 'started_at' => now()->subDays(2)]);
+
+    expect(app(SportMonksSyncer::class)->pruneLiveRuns())->toBe(1)
+        ->and(SyncRun::query()->count())->toBe(2);
+});
+
 it('fetches the scorecard of a finished match once and marks it done', function () {
     $league = League::factory()->create(['id' => 3]);
     Fixture::factory()->finished()->create(['id' => 20094, 'league_id' => $league->id]);

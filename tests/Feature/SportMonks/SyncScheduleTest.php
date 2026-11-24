@@ -30,6 +30,15 @@ it('schedules every sync with the intervals from the config', function () {
     }
 });
 
+it('repeats the live sync every 10 seconds by default', function () {
+    expect(config('sportmonks.live_every_seconds'))->toBe(10)
+        ->and(syncEventsByTarget()['live']->repeatSeconds)->toBe(10);
+
+    foreach (['details', 'fixtures', 'standings'] as $target) {
+        expect(syncEventsByTarget()[$target]->repeatSeconds)->toBeNull();
+    }
+});
+
 it('runs live data every minute and slow-changing data every 12 hours', function () {
     $events = syncEventsByTarget();
     $at = fn (string $time): Carbon => Carbon::parse("2026-11-22 {$time}", 'UTC');

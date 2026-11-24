@@ -65,6 +65,17 @@ return [
         'squads' => env('SPORTMONKS_SCHEDULE_SQUADS', '30 4,16 * * *'),        // every 12 hours
     ],
 
+    /*
+    | Live scores: how often the livescores call runs while a match is on (one call covers every live match).
+    | Allowed: 5, 10, 15, 20 or 30 seconds, or 0 to use the per-minute cron in `schedule.live` instead.
+    | 10 seconds = 360 calls an hour, well inside the 2000 an hour plan limit (the client stops 100 calls short).
+    */
+    'live_every_seconds' => (int) env('SPORTMONKS_LIVE_EVERY_SECONDS', 10),
+
+    // The live call keeps running this many hours after a match was due to start (a match not marked live yet is
+    // still polled so its start is noticed). Lower it to save calls; long Test matches stay covered by is_live.
+    'live_window_hours' => (int) env('SPORTMONKS_LIVE_WINDOW_HOURS', 12),
+
     // Timezone used for "today" and the HH:mm start time labels.
     'display_timezone' => env('SPORTMONKS_DISPLAY_TIMEZONE', 'Asia/Dhaka'),
 

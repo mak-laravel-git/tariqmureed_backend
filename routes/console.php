@@ -39,6 +39,19 @@ foreach ($overlapMinutes as $target => $minutes) {
         ->cron((string) config("sportmonks.schedule.{$target}"))
         ->when($sportMonksConfigured);
 
+    // Live scores can run more than once a minute: the scheduler repeats the event inside every minute
+    // (needs `schedule:work`, which the Docker image runs, or a cron that calls `schedule:run` every minute).
+    if ($target === 'live') {
+        match ((int) config('sportmonks.live_every_seconds')) {
+            5 => $event->everyFiveSeconds(),
+            10 => $event->everyTenSeconds(),
+            15 => $event->everyFifteenSeconds(),
+            20 => $event->everyTwentySeconds(),
+            30 => $event->everyThirtySeconds(),
+            default => null,
+        };
+    }
+
     if ($minutes > 0) {
         $event->withoutOverlapping($minutes);
     }

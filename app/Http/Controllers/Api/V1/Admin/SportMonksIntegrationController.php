@@ -17,9 +17,8 @@ class SportMonksIntegrationController extends Controller
     public function show(SportMonksClient $client): JsonResponse
     {
         $latest = SyncRun::query()
-            ->orderByDesc('id')
+            ->whereIn('id', SyncRun::query()->selectRaw('max(id)')->groupBy('target'))
             ->get()
-            ->unique('target')
             ->keyBy('target');
 
         $lastSuccess = SyncRun::query()->where('status', SyncRun::SUCCESS)->latest('finished_at')->first();

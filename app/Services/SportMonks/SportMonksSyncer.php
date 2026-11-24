@@ -48,6 +48,16 @@ class SportMonksSyncer
         $this->notes = [];
         $this->lastRunWasFatal = false;
 
+        // The live target can run every few seconds: while nothing is on or about to start, leave no trace.
+        if ($target === SyncTarget::LIVE && ! $this->shouldPollLive()) {
+            return new SyncRun([
+                'target' => $target->value,
+                'status' => SyncRun::SUCCESS,
+                'records_synced' => 0,
+                'message' => 'No match is live or about to start.',
+            ]);
+        }
+
         $run = SyncRun::query()->create([
             'target' => $target->value,
             'status' => SyncRun::RUNNING,
@@ -87,7 +97,22 @@ class SportMonksSyncer
             ]);
         }
 
+        if ($target === SyncTarget::LIVE && random_int(1, 100) === 1) {
+            $this->pruneLiveRuns();
+        }
+
         return $run;
+    }
+
+    /**
+     * Live runs happen every few seconds and only the latest matters: keep a day of them.
+     */
+    public function pruneLiveRuns(): int
+    {
+        return SyncRun::query()
+            ->where('target', SyncTarget::LIVE->value)
+            ->where('started_at', '<', now()->subDay())
+            ->delete();
     }
 
     /**
@@ -581,7 +606,7 @@ class SportMonksSyncer
     {
         return Fixture::query()
             ->where('is_live', true)
-            ->orWhereBetween('starting_at', [now()->subHours(12), now()->addMinutes(30)])
+            ->orWhereBetween('starting_at', [now()->subHours(max(1, (int) config('sportmonks.live_window_hours'))), now()->addMinutes(30)])
             ->exists();
     }
 

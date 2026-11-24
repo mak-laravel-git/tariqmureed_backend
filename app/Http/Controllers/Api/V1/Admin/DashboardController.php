@@ -68,7 +68,7 @@ class DashboardController extends Controller
             'target' => $log->target,
         ]);
 
-        $syncs = SyncRun::query()->latest('id')->limit(6)->get()->map(function (SyncRun $run): array {
+        $syncs = SyncRun::query()->where('target', '!=', SyncTarget::LIVE->value)->latest('id')->limit(6)->get()->map(function (SyncRun $run): array {
             return [
                 'at' => $run->finished_at ?? $run->started_at,
                 'actor' => 'SportMonks sync',
