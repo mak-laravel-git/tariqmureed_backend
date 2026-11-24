@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\MediaAsset;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -13,7 +14,9 @@ use Illuminate\Support\Str;
  * so ContentSeeder and WordPressArticleSeeder can attach real library URLs to stories,
  * categories and authors instead of raw /images/... paths.
  *
- * Safe to run again: an image already stored under the same seeded path is left alone.
+ * Safe to run again: an image already stored under the same seeded path is left alone. A picture whose file went
+ * missing (for example after a redeploy without a persistent storage volume) is put back: from the website's
+ * folder when it sits next to the API, otherwise downloaded from the public website (FRONTEND_URL).
  */
 class MediaLibrarySeeder extends Seeder
 {
@@ -25,7 +28,7 @@ class MediaLibrarySeeder extends Seeder
      */
     public static function url(string $webPath): string
     {
-        $webPath = '/' . ltrim(str_replace('\\', '/', $webPath), '/');
+        $webPath = '/'.ltrim(str_replace('\\', '/', $webPath), '/');
 
         return self::$urls[$webPath] ?? $webPath;
     }
@@ -37,14 +40,14 @@ class MediaLibrarySeeder extends Seeder
     {
         return (string) preg_replace_callback(
             '#(/images/[^\s)"\']+)#',
-            static fn(array $match): string => self::url($match[1]),
+            static fn (array $match): string => self::url($match[1]),
             $body,
         );
     }
 
     public function run(): void
     {
-        $publicRoot = dirname(base_path()) . DIRECTORY_SEPARATOR . 'tariqmureed_frontend' . DIRECTORY_SEPARATOR . 'public';
+        $publicRoot = dirname(base_path()).DIRECTORY_SEPARATOR.'tariqmureed_frontend'.DIRECTORY_SEPARATOR.'public';
 
         // Rebuild the map every run so RefreshDatabase tests still get assets after the table is wiped.
         self::$urls = [];
@@ -53,7 +56,7 @@ class MediaLibrarySeeder extends Seeder
             self::$urls[$webPath] = $this->import($publicRoot, $webPath);
         }
 
-        $this->command?->info('Media library: ' . count(self::$urls) . ' sample images ready.');
+        $this->command?->info('Media library: '.count(self::$urls).' sample images ready.');
     }
 
     /**
@@ -75,7 +78,7 @@ class MediaLibrarySeeder extends Seeder
             $paths[$image] = true;
         }
 
-        $json = __DIR__ . '/data/wordpress_articles.json';
+        $json = __DIR__.'/data/wordpress_articles.json';
         if (is_file($json)) {
             /** @var array<int, array{image?: ?string, body?: string}> $stories */
             $stories = json_decode((string) file_get_contents($json), true, flags: JSON_THROW_ON_ERROR);
@@ -101,22 +104,30 @@ class MediaLibrarySeeder extends Seeder
     private function import(string $publicRoot, string $webPath): string
     {
         $relative = ltrim(str_replace('\\', '/', $webPath), '/');
-        $source = $publicRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
-
-        if (! is_file($source)) {
-            $this->command?->warn("Missing sample image: {$webPath}");
-
-            return $webPath;
-        }
-
-        $destPath = 'media/seeded/' . preg_replace('#^images/#', '', $relative);
+        $source = $publicRoot.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $relative);
+        $destPath = 'media/seeded/'.preg_replace('#^images/#', '', $relative);
+        $disk = Storage::disk('public');
         $existing = MediaAsset::query()->where('path', $destPath)->first();
 
-        if ($existing) {
+        if ($existing && $disk->exists($destPath)) {
             return $existing->url();
         }
 
-        Storage::disk('public')->put($destPath, (string) file_get_contents($source));
+        $contents = $this->contents($source, $relative);
+
+        if ($contents === null) {
+            $this->command?->warn("Missing sample image: {$webPath}");
+
+            return $existing?->url() ?? $webPath;
+        }
+
+        $disk->put($destPath, $contents);
+
+        if ($existing) {
+            $existing->update(['size' => strlen($contents)]);
+
+            return $existing->url();
+        }
 
         $title = Str::of(pathinfo($relative, PATHINFO_FILENAME))
             ->replace(['-', '_'], ' ')
@@ -130,11 +141,37 @@ class MediaLibrarySeeder extends Seeder
             'alt_text' => $title !== '' ? $title : null,
             'path' => $destPath,
             'external_url' => null,
-            'mime' => (string) (mime_content_type($source) ?: 'image/jpeg'),
-            'size' => (int) filesize($source),
+            'mime' => (string) ((new \finfo(FILEINFO_MIME_TYPE))->buffer($contents) ?: 'image/jpeg'),
+            'size' => strlen($contents),
             'user_id' => User::query()->orderBy('id')->value('id'),
         ]);
 
         return $asset->url();
+    }
+
+    /**
+     * The picture's bytes: the website's own file when it is on this machine, else the public website's copy.
+     */
+    private function contents(string $source, string $relative): ?string
+    {
+        if (is_file($source)) {
+            return (string) file_get_contents($source);
+        }
+
+        $base = rtrim((string) config('app.frontend_url'), '/');
+
+        if ($base === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(30)->get($base.'/'.implode('/', array_map('rawurlencode', explode('/', $relative))));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $response->successful() && str_starts_with((string) $response->header('Content-Type'), 'image/') && $response->body() !== ''
+            ? $response->body()
+            : null;
     }
 }
