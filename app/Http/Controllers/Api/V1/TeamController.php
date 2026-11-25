@@ -36,6 +36,7 @@ class TeamController extends Controller
             'name' => $team->name,
             'badge' => $team->shortName(),
             'colors' => $team->colors(),
+            'image' => $team->image ?: null,
             'status' => $inPlay->contains($team->id) ? 'In progress' : 'Upcoming',
             'description' => $team->national_team ? 'International cricket team' : 'Domestic cricket team',
             'group' => $team->national_team ? 'international' : 'domestic',

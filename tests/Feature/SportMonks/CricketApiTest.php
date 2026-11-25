@@ -67,6 +67,18 @@ it('lists matches in the website contract shape', function () {
         ->and($match['startsAt'])->toContain('T');
 });
 
+it('sends each team logo so the site can draw it where there is no country flag', function () {
+    cricketFixture(['id' => 1, 'slug' => 'ind-vs-aus-1']);
+    Team::query()->find(40)->forceFill(['image' => 'https://cdn.sportmonks.com/images/cricket/teams/8/40.png'])->save();
+
+    $this->getJson('/api/v1/matches?state=upcoming')
+        ->assertOk()
+        ->assertJsonPath('data.0.home.team.image', 'https://cdn.sportmonks.com/images/cricket/teams/8/40.png')
+        ->assertJsonPath('data.0.away.team.image', null);
+
+    $this->getJson('/api/v1/teams')->assertOk()->assertJsonFragment(['slug' => 'india', 'image' => 'https://cdn.sportmonks.com/images/cricket/teams/8/40.png']);
+});
+
 it('filters matches by state and treats breaks as live', function () {
     cricketFixture(['id' => 1, 'slug' => 'a'])->forceFill(['status' => '1st Innings', 'is_live' => true])->save();
     cricketFixture(['id' => 2, 'slug' => 'b'])->forceFill(['status' => 'Innings Break', 'is_live' => true])->save();
