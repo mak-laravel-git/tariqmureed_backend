@@ -33,6 +33,7 @@ class ArticleResource extends JsonResource
             'author' => [
                 'slug' => $this->writer?->slug ?? 'tmn-sport-desk',
                 'name' => $this->writer?->name ?? 'TMN Sport Desk',
+                'hasProfile' => $this->writer?->status === 'Active',
             ],
             'publishedAt' => $this->published_at?->toIso8601String(),
             'readMinutes' => max(1, (int) ceil(str_word_count(strip_tags((string) $this->body)) / 220)),

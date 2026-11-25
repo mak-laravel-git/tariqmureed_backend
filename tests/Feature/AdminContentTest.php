@@ -120,6 +120,45 @@ it('lists authors who have published stories', function () {
     $this->getJson('/api/v1/writers/nadia-rahman')->assertOk()->assertJsonPath('data.slug', 'nadia-rahman');
 });
 
+it('lists the published stories of one author newest first and picks up new ones straight away', function () {
+    $writer = Writer::factory()->create(['slug' => 'azmat-nawaz']);
+    $other = Writer::factory()->create(['slug' => 'someone-else']);
+
+    Article::factory()->for($writer)->create(['title' => 'Oldest', 'slug' => 'oldest', 'published_at' => now()->subDays(3)]);
+    Article::factory()->for($writer)->create(['title' => 'Newest', 'slug' => 'newest', 'published_at' => now()->subHour()]);
+    Article::factory()->for($writer)->create(['title' => 'Middle', 'slug' => 'middle', 'published_at' => now()->subDay()]);
+    Article::factory()->for($writer)->draft()->create(['title' => 'Secret draft', 'slug' => 'secret-draft']);
+    Article::factory()->for($writer)->create(['slug' => 'later', 'status' => Article::SCHEDULED, 'published_at' => now()->addDay()]);
+    Article::factory()->for($other)->create(['title' => 'Not mine', 'slug' => 'not-mine']);
+
+    $this->getJson('/api/v1/writers/azmat-nawaz/articles')
+        ->assertOk()
+        ->assertJsonPath('data.total', 3)
+        ->assertJsonPath('data.articles.0.slug', 'newest')
+        ->assertJsonPath('data.articles.1.slug', 'middle')
+        ->assertJsonPath('data.articles.2.slug', 'oldest')
+        ->assertJsonPath('data.articles.0.author.slug', 'azmat-nawaz')
+        ->assertJsonPath('data.articles.0.author.hasProfile', true);
+
+    Article::factory()->for($writer)->create(['title' => 'Breaking', 'slug' => 'breaking', 'published_at' => now()]);
+
+    $this->getJson('/api/v1/writers/azmat-nawaz/articles?limit=2')
+        ->assertOk()
+        ->assertJsonCount(2, 'data.articles')
+        ->assertJsonPath('data.total', 4)
+        ->assertJsonPath('data.articles.0.slug', 'breaking');
+
+    $this->getJson('/api/v1/writers/nobody/articles')->assertNotFound();
+});
+
+it('marks stories without an active author as having no profile page', function () {
+    $inactive = Writer::factory()->create(['status' => 'Inactive']);
+    Article::factory()->for($inactive)->create(['slug' => 'orphaned']);
+
+    $this->getJson('/api/v1/articles/orphaned')->assertOk()->assertJsonPath('data.author.hasProfile', false);
+    $this->getJson("/api/v1/writers/{$inactive->slug}/articles")->assertNotFound();
+});
+
 it('searches, filters and edits articles from the admin table', function () {
     Article::factory()->create(['title' => 'Alpha cup final']);
     $draft = Article::factory()->draft()->create(['title' => 'Beta preview']);

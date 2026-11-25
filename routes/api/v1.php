@@ -95,6 +95,7 @@ Route::get('articles/{slug}', [ArticleController::class, 'show'])->name('article
 Route::get('news', NewsController::class)->name('news');
 Route::get('writers', [WriterController::class, 'index'])->name('writers.index');
 Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
+Route::get('writers/{slug}/articles', [WriterController::class, 'articles'])->name('writers.articles');
 
 Route::get('ads', AdController::class)->name('ads');
 Route::get('ticker', TickerController::class)->name('ticker');
