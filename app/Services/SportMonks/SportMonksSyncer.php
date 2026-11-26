@@ -11,6 +11,7 @@ use App\Models\Season;
 use App\Models\Standing;
 use App\Models\SyncRun;
 use App\Models\Team;
+use App\Models\TeamRanking;
 use App\Models\Venue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -73,6 +74,8 @@ class SportMonksSyncer
                 SyncTarget::SQUADS => $this->syncSquads(),
                 SyncTarget::STANDINGS => $this->syncStandings(),
                 SyncTarget::DETAILS => $this->syncDetails(),
+                SyncTarget::RANKINGS => $this->syncRankings(),
+                SyncTarget::CAREERS => $this->syncCareers(),
                 SyncTarget::LIVE => $this->syncLive(),
                 SyncTarget::ALL => 0,
             };
@@ -303,6 +306,80 @@ class SportMonksSyncer
         return $count;
     }
 
+    /**
+     * The official team rankings for every format and gender: one call. Each group lists its teams in order,
+     * with the position, matches, points and rating of that team in the group.
+     */
+    public function syncRankings(): int
+    {
+        $count = 0;
+
+        foreach ($this->rows($this->client->get('team-rankings')) as $group) {
+            $format = strtoupper((string) ($group['type'] ?? ''));
+            $gender = strtolower((string) ($group['gender'] ?? 'men'));
+
+            if (! array_key_exists($format, TeamRanking::FORMATS)) {
+                continue;
+            }
+
+            foreach ($this->many($group, 'team') as $row) {
+                $team = $this->upsertTeam($row);
+
+                if (! $team) {
+                    continue;
+                }
+
+                $ranking = is_array($row['ranking'] ?? null) ? $row['ranking'] : [];
+
+                TeamRanking::query()->updateOrCreate(
+                    ['team_id' => $team->id, 'format' => $format, 'gender' => $gender],
+                    [
+                        'position' => (int) ($ranking['position'] ?? $row['position'] ?? 0),
+                        'matches' => (int) ($ranking['matches'] ?? 0),
+                        'points' => (int) ($ranking['points'] ?? 0),
+                        'rating' => (int) ($ranking['rating'] ?? 0),
+                    ],
+                );
+
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Career statistics of the players of ranked national teams, a few per run (one call each), so the player
+     * rankings on the team pages fill in over a few hours without waiting for each profile to be opened.
+     */
+    public function syncCareers(): int
+    {
+        $players = Player::query()
+            ->whereIn('team_id', TeamRanking::query()->select('team_id'))
+            ->where(fn (Builder $query) => $query->whereNull('details_synced_at')->orWhere('details_synced_at', '<', now()->subWeek()))
+            ->orderByRaw('details_synced_at is not null')
+            ->orderBy('details_synced_at')
+            ->limit((int) config('sportmonks.sync.careers_per_run'))
+            ->get();
+
+        $count = 0;
+
+        foreach ($players as $player) {
+            try {
+                $this->refreshPlayer($player);
+                $count++;
+            } catch (SportMonksException $exception) {
+                if ($exception->isFatal()) {
+                    throw $exception;
+                }
+
+                $this->notes[] = "player {$player->id}: {$exception->getMessage()}";
+            }
+        }
+
+        return $count;
+    }
+
     public function syncStandings(): int
     {
         $count = 0;
@@ -350,10 +427,14 @@ class SportMonksSyncer
     }
 
     /**
-     * Squads of the teams that play in the fixture window, a limited number per run.
+     * Squads of the teams that play in the fixture window, a limited number per run. Teams with no squad yet
+     * (a national side that has no match in the window, such as one between series) are filled in afterwards
+     * from the team's own record, so their page is not empty.
      */
     public function syncSquads(): int
     {
+        $limit = (int) config('sportmonks.sync.squads_per_run');
+
         $pairs = Fixture::query()
             ->whereNotNull('season_id')
             ->whereBetween('starting_at', [now()->subDays(7), now()->addDays(30)])
@@ -367,7 +448,7 @@ class SportMonksSyncer
                 ->where('team_id', $pair[0])
                 ->where('updated_at', '>', now()->subHours(20))
                 ->exists())
-            ->take((int) config('sportmonks.sync.squads_per_run'));
+            ->take($limit);
 
         $count = 0;
 
@@ -384,13 +465,60 @@ class SportMonksSyncer
                 continue;
             }
 
-            $data = is_array($body['data'] ?? null) ? $body['data'] : [];
-            $squad = $data['squad']['data'] ?? $data['squad'] ?? (array_is_list($data) ? $data : []);
+            $count += $this->storeSquad($body, (int) $teamId);
+        }
 
-            foreach ($squad as $row) {
-                if ($this->upsertPlayer($row, (int) $teamId, true)) {
-                    $count++;
+        return $count + $this->syncMissingSquads(max(0, $limit - $pairs->count()));
+    }
+
+    /**
+     * National teams that still have no player, filled from the team's own squad (its current one).
+     * A few per run, so the whole list fills in over a day without spending many calls.
+     */
+    private function syncMissingSquads(int $room): int
+    {
+        $count = 0;
+
+        $teams = Team::query()
+            ->where('national_team', true)
+            ->whereDoesntHave('players')
+            ->orderBy('id')
+            ->limit(min($room, (int) config('sportmonks.sync.missing_squads_per_run')))
+            ->pluck('id');
+
+        foreach ($teams as $teamId) {
+            try {
+                $body = $this->client->get("teams/{$teamId}", ['include' => 'squad']);
+            } catch (SportMonksException $exception) {
+                if ($exception->isFatal()) {
+                    throw $exception;
                 }
+
+                $this->notes[] = "squad {$teamId}: {$exception->getMessage()}";
+
+                continue;
+            }
+
+            $count += $this->storeSquad($body, (int) $teamId);
+        }
+
+        return $count;
+    }
+
+    /**
+     * Save the players of a squad response, which holds the list directly, under `squad`, or under `squad.data`.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function storeSquad(array $body, int $teamId): int
+    {
+        $data = is_array($body['data'] ?? null) ? $body['data'] : [];
+        $squad = $data['squad']['data'] ?? $data['squad'] ?? (array_is_list($data) ? $data : []);
+        $count = 0;
+
+        foreach (is_array($squad) ? $squad : [] as $row) {
+            if (is_array($row) && $this->upsertPlayer($row, $teamId, true)) {
+                $count++;
             }
         }
 

@@ -25,6 +25,7 @@ final class SeoPages
             '/series' => ['label' => 'Series & Tournaments', 'title' => 'Series & Tournaments', 'description' => 'Explore current, upcoming and recently completed competitions.'],
             '/teams' => ['label' => 'Teams', 'title' => 'Teams', 'description' => 'National sides, domestic clubs, squads, fixtures and results.'],
             '/players' => ['label' => 'Players', 'title' => 'Players', 'description' => 'Profiles and career statistics for the players making headlines.'],
+            '/rankings' => ['label' => 'Rankings', 'title' => 'Cricket Rankings', 'description' => 'Official team rankings in Tests, ODIs and T20Is, with the leading batters and bowlers of every team.'],
             '/stats' => ['label' => 'Stats', 'title' => 'Statistics', 'description' => 'Batting and bowling tables by format and scope, taken straight from the data feed.'],
             '/records' => ['label' => 'Records', 'title' => 'Cricket Records', 'description' => 'Landmark performances across batting, bowling, teams and tournaments.'],
             '/videos' => ['label' => 'Videos', 'title' => 'Videos', 'description' => 'Highlights, interviews, analysis and original TMN Sport features.'],

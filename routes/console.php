@@ -32,7 +32,7 @@ Schedule::command('sportmonks:sync all')
     ->withoutOverlapping(30);
 
 /** @var array<string, int> $overlapMinutes Minutes an unfinished run blocks the next one (0 = no lock). */
-$overlapMinutes = ['live' => 5, 'details' => 15, 'fixtures' => 30, 'standings' => 30, 'leagues' => 0, 'venues' => 0, 'teams' => 0, 'squads' => 60];
+$overlapMinutes = ['live' => 5, 'details' => 15, 'fixtures' => 30, 'standings' => 30, 'leagues' => 0, 'venues' => 0, 'teams' => 0, 'squads' => 60, 'rankings' => 0, 'careers' => 30];
 
 foreach ($overlapMinutes as $target => $minutes) {
     $event = Schedule::command("sportmonks:sync {$target}")

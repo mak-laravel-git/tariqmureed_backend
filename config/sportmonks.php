@@ -44,6 +44,10 @@ return [
         'details_per_run' => (int) env('SPORTMONKS_DETAILS_PER_RUN', 15),
         // Squads fetched per run (one call per team and season).
         'squads_per_run' => (int) env('SPORTMONKS_SQUADS_PER_RUN', 40),
+        // National teams without any player yet that get their squad filled in per run (one call each).
+        // Player career profiles fetched per run (one call each) for players of ranked national teams.
+        'careers_per_run' => (int) env('SPORTMONKS_CAREERS_PER_RUN', 20),
+        'missing_squads_per_run' => (int) env('SPORTMONKS_MISSING_SQUADS_PER_RUN', 10),
     ],
 
     /*
@@ -63,6 +67,8 @@ return [
         'venues' => env('SPORTMONKS_SCHEDULE_VENUES', '10 3,15 * * *'),        // every 12 hours
         'teams' => env('SPORTMONKS_SCHEDULE_TEAMS', '20 3,15 * * *'),          // every 12 hours
         'squads' => env('SPORTMONKS_SCHEDULE_SQUADS', '30 4,16 * * *'),        // every 12 hours
+        'rankings' => env('SPORTMONKS_SCHEDULE_RANKINGS', '40 5 * * *'),       // once a day
+        'careers' => env('SPORTMONKS_SCHEDULE_CAREERS', '*/30 * * * *'),       // every 30 minutes
     ],
 
     /*

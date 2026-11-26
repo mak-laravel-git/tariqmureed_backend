@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\MatchdayController;
 use App\Http\Controllers\Api\V1\NewsController;
 use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\PlayerController;
+use App\Http\Controllers\Api\V1\RankingController;
 use App\Http\Controllers\Api\V1\SeoController;
 use App\Http\Controllers\Api\V1\SeriesController;
 use App\Http\Controllers\Api\V1\SiteSettingsController;
@@ -93,6 +94,7 @@ Route::get('articles/most-read', [ArticleController::class, 'mostRead'])->name('
 Route::get('articles', [ArticleController::class, 'index'])->name('articles.index');
 Route::get('articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
 Route::get('news', NewsController::class)->name('news');
+Route::get('rankings', RankingController::class)->name('rankings');
 Route::get('writers', [WriterController::class, 'index'])->name('writers.index');
 Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
 Route::get('writers/{slug}/articles', [WriterController::class, 'articles'])->name('writers.articles');

@@ -20,10 +20,14 @@ class CompetitionController extends Controller
         $perPage = min(max($request->integer('per_page', 10), 1), 100);
         $search = trim((string) $request->query('q'));
 
-        // Competitions are always live data, so the "pending" and "archived" tabs have nothing to show.
-        $query = in_array($request->query('tab', 'all'), ['all', 'active'], true)
-            ? League::query()
-            : League::query()->whereRaw('1 = 0');
+        // "Active" are the competitions shown on the website's series strip, "archived" the hidden ones.
+        // Competitions have no draft stage, so "pending" has nothing to show.
+        $query = match ($request->query('tab', 'all')) {
+            'active' => League::query()->where('is_featured', true),
+            'archived' => League::query()->where('is_featured', false),
+            'pending' => League::query()->whereRaw('1 = 0'),
+            default => League::query(),
+        };
 
         $leagues = $query
             ->when($search !== '', fn ($builder) => $builder->where('name', 'like', "%{$search}%"))
@@ -97,7 +101,7 @@ class CompetitionController extends Controller
             'title' => $league->name,
             'subtitle' => collect([$league->code, $league->format])->filter()->implode(' · ') ?: 'Competition',
             'owner' => 'SportMonks',
-            'status' => $league->is_featured ? 'Active' : 'Archived',
+            'status' => $league->is_featured ? 'Shown on website' : 'Hidden from website',
             'updatedAt' => $league->updated_at->diffForHumans(),
             'notes' => null,
         ];

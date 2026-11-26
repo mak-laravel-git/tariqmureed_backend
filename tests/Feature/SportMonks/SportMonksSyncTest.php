@@ -8,6 +8,7 @@ use App\Models\Season;
 use App\Models\Standing;
 use App\Models\SyncRun;
 use App\Models\Team;
+use App\Models\TeamRanking;
 use App\Services\SportMonks\SportMonksSyncer;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\SportMonksPayloads as Payloads;
@@ -223,6 +224,74 @@ it('stores squads for the teams playing soon', function () {
         ->and(Player::query()->findOrFail(21)->fullname)->toBe('Pat Cummins');
 });
 
+it('fills in the squad of a national team that has no match in the window', function () {
+    Team::factory()->national()->create(['id' => 1, 'name' => 'Pakistan', 'slug' => 'pakistan']);
+    Team::factory()->create(['id' => 9, 'national_team' => false]);
+    Payloads::fake([
+        'teams/1' => ['data' => ['id' => 1, 'squad' => ['data' => [['id' => 51, 'fullname' => 'Babar Azam', 'position' => ['name' => 'Batsman']]]]]],
+    ]);
+
+    $run = app(SportMonksSyncer::class)->run(SyncTarget::SQUADS);
+
+    expect($run->records_synced)->toBe(1)
+        ->and(Player::query()->findOrFail(51)->team_id)->toBe(1);
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'teams/1') && str_contains($request->url(), 'include=squad'));
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'teams/9'));
+});
+
+it('stores the official team rankings for every format and gender', function () {
+    $team = fn (int $id, string $name, int $position, int $matches, int $points, int $rating): array => [
+        ...Payloads::team($id, $name, strtoupper(substr($name, 0, 3))),
+        'position' => $position,
+        'ranking' => ['position' => $position, 'matches' => $matches, 'points' => $points, 'rating' => $rating],
+    ];
+
+    Payloads::fake([
+        'team-rankings' => ['data' => [
+            ['resource' => 'team-rankings', 'type' => 'TEST', 'gender' => 'men', 'team' => [$team(40, 'India', 1, 30, 3600, 120), $team(41, 'Australia', 2, 28, 3220, 115)]],
+            ['resource' => 'team-rankings', 'type' => 'ODI', 'gender' => 'men', 'team' => ['data' => [$team(40, 'India', 2, 40, 4640, 116)]]],
+            ['resource' => 'team-rankings', 'type' => 'T20I', 'gender' => 'women', 'team' => [$team(41, 'Australia', 1, 20, 2900, 145)]],
+            ['resource' => 'team-rankings', 'type' => 'WTEST', 'gender' => 'men', 'team' => [$team(40, 'India', 1, 1, 1, 1)]],
+        ]],
+    ]);
+
+    $run = app(SportMonksSyncer::class)->run(SyncTarget::RANKINGS);
+
+    expect($run->status)->toBe(SyncRun::SUCCESS)
+        ->and($run->records_synced)->toBe(4)
+        ->and(TeamRanking::query()->count())->toBe(4)
+        ->and(TeamRanking::query()->where(['team_id' => 41, 'format' => 'TEST', 'gender' => 'men'])->firstOrFail()->points)->toBe(3220)
+        ->and(TeamRanking::query()->where(['team_id' => 41, 'format' => 'T20I', 'gender' => 'women'])->firstOrFail()->position)->toBe(1)
+        ->and(Team::query()->find(40)->name)->toBe('India');
+
+    app(SportMonksSyncer::class)->run(SyncTarget::RANKINGS);
+
+    expect(TeamRanking::query()->count())->toBe(4);
+});
+
+it('fetches career statistics for players of ranked teams only, oldest first', function () {
+    $india = Team::factory()->national()->create(['id' => 40]);
+    $club = Team::factory()->create(['id' => 90]);
+    TeamRanking::factory()->create(['team_id' => 40]);
+    $never = Player::factory()->create(['id' => 1, 'team_id' => 40, 'details_synced_at' => null]);
+    $stale = Player::factory()->create(['id' => 2, 'team_id' => 40, 'details_synced_at' => now()->subWeeks(3)]);
+    $fresh = Player::factory()->create(['id' => 3, 'team_id' => 40, 'details_synced_at' => now()->subHour()]);
+    $other = Player::factory()->create(['id' => 4, 'team_id' => 90, 'details_synced_at' => null]);
+    config(['sportmonks.sync.careers_per_run' => 2]);
+
+    Payloads::fake([
+        'players/1' => ['data' => ['id' => 1, 'fullname' => $never->fullname, 'career' => [['type' => 'ODI', 'batting' => ['runs_scored' => 100]]]]],
+        'players/2' => ['data' => ['id' => 2, 'fullname' => $stale->fullname, 'career' => []]],
+    ]);
+
+    $run = app(SportMonksSyncer::class)->run(SyncTarget::CAREERS);
+
+    expect($run->records_synced)->toBe(2)
+        ->and($never->refresh()->career[0]['batting']['runs_scored'])->toBe(100)
+        ->and($fresh->refresh()->details_synced_at->lt(now()->subMinutes(30)))->toBeTrue()
+        ->and($other->refresh()->details_synced_at)->toBeNull();
+});
+
 it('records a failed run with a readable message when the token is rejected', function () {
     Payloads::fake(['leagues' => Http::response(['message' => 'Unauthenticated'], 401)]);
 
@@ -250,11 +319,12 @@ it('runs every target of a full sync in dependency order', function () {
         'fixtures' => ['data' => [Payloads::fixture(['starting_at' => now()->addDay()->toIso8601String()])]],
         'standings/season/6' => ['data' => []],
         'teams/*' => ['data' => ['id' => 40, 'squad' => []]],
+        'team-rankings' => ['data' => []],
     ]);
 
     $runs = app(SportMonksSyncer::class)->runAll();
 
-    expect(collect($runs)->pluck('target')->all())->toBe(['leagues', 'venues', 'teams', 'fixtures', 'squads', 'standings', 'details'])
+    expect(collect($runs)->pluck('target')->all())->toBe(['leagues', 'venues', 'teams', 'fixtures', 'squads', 'standings', 'details', 'rankings'])
         ->and(collect($runs)->pluck('status')->unique()->all())->toBe([SyncRun::SUCCESS]);
 });
 

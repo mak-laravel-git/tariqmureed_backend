@@ -72,7 +72,12 @@ it('puts the featured story first and builds the breaking news bar', function ()
     Article::factory()->draft()->create(['is_breaking' => true, 'slug' => 'hidden']);
 
     $this->getJson('/api/v1/articles/featured')->assertOk()->assertJsonPath('data.lead.slug', $featured->slug);
-    $this->getJson('/api/v1/ticker')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0', ['id' => Article::query()->where('slug', 'breaking')->value('id'), 'text' => 'Breaking story', 'href' => '/news/breaking']);
+    $ticker = $this->getJson('/api/v1/ticker')->assertOk()
+        ->assertJsonPath('data.0', ['id' => 'breaking-'.Article::query()->where('slug', 'breaking')->value('id'), 'text' => 'Breaking story', 'href' => '/news/breaking'])
+        ->json('data');
+
+    // The breaking story leads, the newest headlines fill the bar, and a hidden draft never appears.
+    expect(collect($ticker)->pluck('text')->all())->toBe(['Breaking story', 'Newest story', 'Featured story']);
 });
 
 it('turns toolbar formatting into blocks', function () {
