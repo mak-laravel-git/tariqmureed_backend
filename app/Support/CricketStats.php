@@ -22,6 +22,9 @@ final class CricketStats
         'T20' => ['T20'],
     ];
 
+    /** "All formats" means international cricket, as on most cricket sites; domestic T20 has its own filter. */
+    private const INTERNATIONAL = ['Test', 'ODI', 'T20I'];
+
     private const TOP = 10;
 
     /** @var Collection<int, array<string, mixed>>|null */
@@ -99,7 +102,7 @@ final class CricketStats
     private function playerTables(?string $format): array
     {
         $players = $this->players($format);
-        $label = 'PLAYER · '.($format ?? 'All formats');
+        $label = 'PLAYER · '.($format ?? 'All internationals');
 
         return $this->keep([
             $this->table('most-runs', $label, 'Most runs', 'Player', 'Runs', $this->rank($players, fn (array $p): int => $p['runs'], fn (array $p): string => number_format($p['runs']), fn (array $p): bool => $p['runs'] > 0)),
@@ -137,7 +140,7 @@ final class CricketStats
      */
     private function teamTables(?string $format): array
     {
-        $label = 'TEAM · '.($format ?? 'All formats');
+        $label = 'TEAM · '.($format ?? 'All internationals');
 
         return $this->keep([
             $this->table('team-rating', $label, 'Highest ranking rating', 'Team', 'Rating', $this->ratings($format)),
@@ -152,7 +155,7 @@ final class CricketStats
      */
     private function tournamentTables(?string $format): array
     {
-        $label = 'TOURNAMENT · '.($format ?? 'All formats');
+        $label = 'TOURNAMENT · '.($format ?? 'All competitions');
 
         return $this->keep([
             $this->table('table-points', $label, 'Most points in a league table', 'Team', 'Points', $this->standings($format, 'points')),
@@ -168,7 +171,7 @@ final class CricketStats
      */
     private function players(?string $format): Collection
     {
-        $types = $format ? self::FORMATS[$format] : array_merge(...array_values(self::FORMATS));
+        $types = $this->types($format);
 
         return $this->careers()
             ->map(function (array $player) use ($types): ?array {
@@ -266,7 +269,7 @@ final class CricketStats
      */
     private function matches(?string $format): Collection
     {
-        $types = $format ? self::FORMATS[$format] : array_merge(...array_values(self::FORMATS));
+        $types = $this->types($format);
 
         return Fixture::query()
             ->finished()
@@ -412,6 +415,16 @@ final class CricketStats
                 'value' => $column === 'net_run_rate' ? sprintf('%+.3f', $row->net_run_rate) : (string) $row->{$column},
             ])
             ->all();
+    }
+
+    /**
+     * Feed labels for one format, or for the three international formats together.
+     *
+     * @return array<int, string>
+     */
+    private function types(?string $format): array
+    {
+        return $format ? self::FORMATS[$format] : array_merge(...array_map(fn (string $name): array => self::FORMATS[$name], self::INTERNATIONAL));
     }
 
     private function leagueFormat(?string $format): ?string

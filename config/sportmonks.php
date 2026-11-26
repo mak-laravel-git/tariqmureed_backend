@@ -46,7 +46,7 @@ return [
         'squads_per_run' => (int) env('SPORTMONKS_SQUADS_PER_RUN', 40),
         // National teams without any player yet that get their squad filled in per run (one call each).
         // Player career profiles fetched per run (one call each) for players of ranked national teams.
-        'careers_per_run' => (int) env('SPORTMONKS_CAREERS_PER_RUN', 20),
+        'careers_per_run' => (int) env('SPORTMONKS_CAREERS_PER_RUN', 60),
         // National teams without a recorded appearance whose recent line-ups are fetched per run (two calls or more each).
         'form_teams_per_run' => (int) env('SPORTMONKS_FORM_TEAMS_PER_RUN', 10),
         'missing_squads_per_run' => (int) env('SPORTMONKS_MISSING_SQUADS_PER_RUN', 10),

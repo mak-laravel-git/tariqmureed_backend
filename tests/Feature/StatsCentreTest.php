@@ -6,6 +6,7 @@ use App\Models\Player;
 use App\Models\Standing;
 use App\Models\Team;
 use App\Models\TeamRanking;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * @return array<string, mixed>
@@ -39,7 +40,15 @@ it('ranks players by their career figures in a format', function () {
 
     $all = collect($this->getJson('/api/v1/stats')->json('data.tables'))->keyBy('id');
 
-    expect($all['most-runs']['rows'][0])->toMatchArray(['name' => 'Batter One', 'value' => '5,900']);
+    expect($all['most-runs']['rows'][0])->toMatchArray(['name' => 'Batter One', 'value' => '5,900'])
+        ->and($all['most-runs']['eyebrow'])->toBe('PLAYER · All internationals');
+
+    // Domestic T20 counts under its own filter, not in the international total.
+    Player::factory()->create(['team_id' => $india->id, 'fullname' => 'League Star', 'career' => [careerRow('T20', 9000, 300)]]);
+    Cache::flush();
+
+    expect(collect($this->getJson('/api/v1/stats')->json('data.tables.0.rows'))->pluck('name'))->not->toContain('League Star')
+        ->and($this->getJson('/api/v1/stats?format=T20')->json('data.tables.0.rows.0.name'))->toBe('League Star');
 });
 
 it('builds team and tournament leaderboards from rankings, stored matches and league tables', function () {
