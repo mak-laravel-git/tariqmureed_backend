@@ -30,6 +30,7 @@ class ArticleDetailResource extends ArticleResource
         return [
             ...parent::toArray($request),
             'subtitle' => $this->summary,
+            'updatedAt' => $this->updated_at?->toIso8601String(),
             'breadcrumb' => array_values(array_filter([$this->category?->name])),
             'blocks' => $this->blocks(),
             'seoTitle' => $this->seo_title ?: null,

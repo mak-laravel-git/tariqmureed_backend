@@ -100,6 +100,19 @@ it('reports what to fix on the SEO screen', function () {
         ->and($health['hidden']['status'])->toBe('info');
 });
 
+it('tells the website when a story was last edited so search engines get a true modified date', function () {
+    $editedAt = now()->subHour()->startOfSecond();
+
+    $this->travelTo($editedAt);
+    Article::factory()->create(['status' => Article::PUBLISHED, 'published_at' => $editedAt->copy()->subDay(), 'slug' => 'edited-story']);
+    $this->travelBack();
+
+    $data = $this->getJson('/api/v1/articles/edited-story')->assertOk()->json('data');
+
+    expect(Carbon\Carbon::parse($data['updatedAt'])->equalTo($editedAt))->toBeTrue()
+        ->and($data['updatedAt'])->not->toBe($data['publishedAt']);
+});
+
 it('keeps a story out of the sitemap and search results when marked do not index', function () {
     signInAsSeoAdmin();
 
