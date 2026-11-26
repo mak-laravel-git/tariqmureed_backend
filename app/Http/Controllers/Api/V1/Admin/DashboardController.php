@@ -37,7 +37,7 @@ class DashboardController extends Controller
                 $this->stat('Pending approval', Article::query()->where('status', Article::PENDING)->count(), 'Awaiting review', 'clock'),
                 $this->stat('Categories', Category::query()->count(), 'Editorial taxonomy', 'folder'),
                 $this->stat('Authors', Writer::query()->count(), 'Published contributors', 'users'),
-                $this->stat('Media assets', MediaAsset::query()->count(), 'Images and thumbnails', 'image'),
+                $this->stat('Media assets', MediaAsset::query()->originals()->count(), 'Images and thumbnails', 'image'),
                 $this->stat('Active staff', User::query()->count(), 'Administrator accounts', 'user'),
             ],
             'activity' => $this->activity(),
@@ -124,7 +124,7 @@ class DashboardController extends Controller
                 'status' => $sportMonksStatus,
                 'icon' => 'plug',
             ],
-            ['name' => 'Media storage', 'detail' => number_format(MediaAsset::query()->count()).' assets stored in the library', 'status' => 'Connected', 'icon' => 'storage'],
+            ['name' => 'Media storage', 'detail' => number_format(MediaAsset::query()->originals()->count()).' assets stored in the library', 'status' => 'Connected', 'icon' => 'storage'],
             [
                 'name' => 'Public website',
                 'detail' => number_format(Article::query()->visible()->count()).' published stories · '.$customisedPages.' of '.count(SitePage::SLUGS).' legal pages customised',

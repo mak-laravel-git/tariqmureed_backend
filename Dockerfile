@@ -35,7 +35,8 @@ ENV PHP_OPCACHE_ENABLE=1 \
 USER root
 
 # Laravel + MySQL essentials (image already ships common PHP extensions)
-RUN install-php-extensions intl bcmath pcntl pdo_mysql
+# gd and exif are used to crop pictures from the media library.
+RUN install-php-extensions intl bcmath pcntl pdo_mysql gd exif
 
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
 
