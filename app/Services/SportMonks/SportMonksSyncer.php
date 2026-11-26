@@ -13,6 +13,7 @@ use App\Models\SyncRun;
 use App\Models\Team;
 use App\Models\TeamRanking;
 use App\Models\Venue;
+use App\Support\BallByBall;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,9 @@ use Throwable;
  */
 class SportMonksSyncer
 {
+    /** Everything the match page shows, asked for when one match is fetched. */
+    private const MATCH_INCLUDE = 'localteam,visitorteam,venue,runs,batting,bowling,lineup,balls,scoreboards,manofmatch,manofseries,firstumpire,secondumpire,tvumpire,referee,stage,season';
+
     /**
      * Problems with single items that did not stop the run.
      *
@@ -277,9 +281,7 @@ class SportMonksSyncer
 
         foreach ($fixtures as $fixture) {
             try {
-                $body = $this->client->get("fixtures/{$fixture->id}", [
-                    'include' => 'localteam,visitorteam,venue,runs,batting,bowling,lineup',
-                ]);
+                $body = $this->client->get("fixtures/{$fixture->id}", ['include' => self::MATCH_INCLUDE]);
             } catch (SportMonksException $exception) {
                 if ($exception->isFatal()) {
                     throw $exception;
@@ -306,6 +308,24 @@ class SportMonksSyncer
         }
 
         return $count;
+    }
+
+    /**
+     * Fetch everything the match page shows for one match (one call): scorecards, line-ups, ball-by-ball, extras,
+     * officials and awards.
+     *
+     * @throws SportMonksException
+     */
+    public function refreshMatchCentre(Fixture $fixture): void
+    {
+        $row = $this->client->get("fixtures/{$fixture->id}", ['include' => self::MATCH_INCLUDE])['data'] ?? null;
+
+        if (is_array($row)) {
+            $this->upsertFixture($row);
+        }
+
+        // Marked even when the feed had nothing to add, so the same match is not asked again straight away.
+        Fixture::query()->whereKey($fixture->id)->update(['centre_synced_at' => now()]);
     }
 
     /**
@@ -835,10 +855,19 @@ class SportMonksSyncer
             'man_of_match_id' => $row['man_of_match_id'] ?? null,
         ];
 
-        foreach (['runs', 'batting', 'bowling', 'lineup'] as $scoreboard) {
+        foreach (['runs', 'batting', 'bowling', 'lineup', 'scoreboards'] as $scoreboard) {
             if (array_key_exists($scoreboard, $row)) {
                 $attributes[$scoreboard] = $this->many($row, $scoreboard);
             }
+        }
+
+        if (array_key_exists('balls', $row)) {
+            $attributes['balls'] = array_map(BallByBall::compact(...), $this->many($row, 'balls'));
+            $attributes['centre_synced_at'] = now();
+        }
+
+        if (array_key_exists('stage', $row) || array_key_exists('manofmatch', $row)) {
+            $attributes['details'] = $this->matchDetails($row);
         }
 
         $fixture = Fixture::query()->find($id);
@@ -857,6 +886,41 @@ class SportMonksSyncer
         $this->storeLineup($attributes['lineup'] ?? [], $fixture->starting_at);
 
         return $fixture;
+    }
+
+    /**
+     * Officials, awards, series stage and over limits of a match fetched with its full details.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function matchDetails(array $row): array
+    {
+        $person = function (string $key) use ($row): ?array {
+            $found = $this->one($row, $key);
+            $name = trim((string) ($found['fullname'] ?? trim(($found['firstname'] ?? '').' '.($found['lastname'] ?? ''))));
+
+            return $name === '' ? null : ['id' => (int) ($found['id'] ?? 0), 'name' => $name, 'image' => $found['image_path'] ?? null];
+        };
+
+        $officials = [];
+
+        foreach (['firstumpire' => 'Umpire', 'secondumpire' => 'Umpire', 'tvumpire' => 'TV umpire', 'referee' => 'Match referee'] as $key => $role) {
+            if ($official = $person($key)) {
+                $officials[] = ['role' => $role, 'name' => $official['name']];
+            }
+        }
+
+        return [
+            'playerOfMatch' => $person('manofmatch'),
+            'playerOfSeries' => $person('manofseries'),
+            'officials' => $officials,
+            'stage' => $this->one($row, 'stage')['name'] ?? null,
+            'season' => $this->one($row, 'season')['name'] ?? null,
+            'totalOvers' => is_numeric($row['total_overs_played'] ?? null) ? (int) $row['total_overs_played'] : null,
+            'targetRuns' => is_numeric($row['rpc_target'] ?? null) ? (int) $row['rpc_target'] : null,
+            'targetOvers' => is_numeric($row['rpc_overs'] ?? null) ? (float) $row['rpc_overs'] : null,
+        ];
     }
 
     /**

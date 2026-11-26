@@ -27,6 +27,10 @@ class Fixture extends Model
             'batting' => 'array',
             'bowling' => 'array',
             'lineup' => 'array',
+            'balls' => 'array',
+            'scoreboards' => 'array',
+            'details' => 'array',
+            'centre_synced_at' => 'datetime',
             'details_synced_at' => 'datetime',
         ];
     }

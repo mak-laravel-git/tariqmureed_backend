@@ -2,23 +2,34 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Enums\MatchState;
+use App\Models\Article;
 use App\Models\Fixture;
 use App\Models\Player;
 use App\Models\Team;
+use App\Support\BallByBall;
+use App\Support\MatchSheet;
 use App\Support\Scoreboard;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
- * The match centre payload: the `Match` fields plus scorecard, squads and stats.
+ * The match centre payload: the `Match` fields plus everything behind the tabs of the match page.
  *
- * SportMonks does not provide commentary text or related news, so those lists stay empty.
+ * Overview, scorecard, commentary, teams and statistics come from SportMonks. The feed has no written commentary,
+ * so each line is made from the ball's result. Related news comes from the site's own stories.
  *
  * @mixin Fixture
  */
 class MatchDetailResource extends MatchResource
 {
+    private const COMMENTARY_LIMIT = 600;
+
+    /** Overs a side bats in the limited-overs formats, when the feed does not say. */
+    private const FORMAT_OVERS = ['T20' => 20, 'T20I' => 20, 'T10' => 10, 'ODI' => 50];
+
     /**
      * How a batter was dismissed, keyed by the SportMonks score id in `wicket_id`
      * (ids from GET /scores).
@@ -48,6 +59,8 @@ class MatchDetailResource extends MatchResource
         $away = $this->teamOf($fixture->visitorTeam, $fixture->visitor_team_id);
         $teamNames = [$home->id => $home->name, $away->id => $away->name];
         $names = $this->playerNames($fixture);
+        $sheet = new MatchSheet($fixture, $names);
+        $balls = collect($fixture->balls ?? []);
 
         $venue = $fixture->venue;
         $subtitle = collect([
@@ -61,67 +74,192 @@ class MatchDetailResource extends MatchResource
             'subtitle' => $subtitle,
             'tossNote' => $this->tossNote($fixture, $home, $away),
             'updatedAt' => $fixture->updated_at->toIso8601String(),
-            'overview' => $this->overview($fixture, $names),
-            'innings' => $this->innings($fixture, $teamNames, $names),
-            'commentary' => [],
+            'overview' => $this->overview($fixture, $sheet, $teamNames, $balls, $this->tossNote($fixture, $home, $away)),
+            'innings' => $this->innings($sheet, $teamNames, $names),
+            'commentary' => $this->commentary($sheet, $teamNames, $balls),
             'squads' => $this->squads($fixture, [$home, $away]),
-            'stats' => $this->stats($fixture, $home, $away),
-            'relatedNews' => [],
+            'stats' => $this->stats($sheet, $home, $away, $balls),
+            'relatedNews' => $this->relatedNews($request, $home, $away),
         ];
     }
 
     /**
-     * @param  Collection<int, string>  $names
+     * The summary tab: the chase and the batters while play is on; the result, awards and officials around it.
+     *
+     * @param  array<int, string>  $teamNames
+     * @param  Collection<int, array<string, mixed>>  $balls
      * @return array<string, mixed>
      */
-    private function overview(Fixture $fixture, Collection $names): array
+    private function overview(Fixture $fixture, MatchSheet $sheet, array $teamNames, Collection $balls, ?string $toss): array
     {
-        $latest = collect($fixture->runs ?? [])
-            ->sortByDesc(fn (array $row): int => Scoreboard::number($row['inning'] ?? null))
-            ->first();
+        $details = $fixture->details ?? [];
+        $live = $fixture->state() === MatchState::LIVE || $fixture->state() === MatchState::BREAK;
+        $runs = collect($fixture->runs ?? [])->sortBy(fn (array $row): int => Scoreboard::number($row['inning'] ?? null))->values();
+        $latest = $runs->last();
+        $inning = $latest ? Scoreboard::number($latest['inning'] ?? null) : 0;
+        $currentRate = $live && $latest ? Scoreboard::runRate((int) ($latest['score'] ?? 0), $latest['overs'] ?? null) : null;
+        $type = strtoupper((string) $fixture->type);
+        $oversEach = ($details['targetOvers'] ?? null) ?: (self::FORMAT_OVERS[$type] ?? null);
+
+        $target = $requiredRate = $projected = null;
+
+        if ($live && $oversEach && $inning === 2 && $runs->count() === 2) {
+            $target = ($details['targetRuns'] ?? null) ?: (int) ($runs->first()['score'] ?? 0) + 1;
+            $needed = $target - (int) ($latest['score'] ?? 0);
+            $ballsLeft = Scoreboard::balls($oversEach) - Scoreboard::balls($latest['overs'] ?? null);
+            $requiredRate = $needed > 0 && $ballsLeft > 0 ? number_format($needed / $ballsLeft * 6, 2, '.', '') : null;
+        }
+
+        if ($live && $oversEach && $inning === 1 && $currentRate !== null) {
+            $projected = (string) (int) round((float) $currentRate * (float) $oversEach);
+        }
+
+        $board = $sheet->boards()->last();
+        $currentBalls = $board ? $balls->where('board', $board)->sortBy('id')->values() : collect();
+        $partnership = $live && $currentBalls->isNotEmpty() ? BallByBall::partnership($currentBalls) : null;
+        $bowling = $live ? collect($fixture->bowling ?? [])->first(fn (array $row): bool => (bool) ($row['active'] ?? false)) : null;
 
         return [
-            'currentRunRate' => $fixture->is_live && $latest ? Scoreboard::runRate((int) ($latest['score'] ?? 0), $latest['overs'] ?? null) : null,
-            'projectedScore' => null,
-            'partnership' => null,
-            'atCrease' => collect($fixture->batting ?? [])
+            'currentRunRate' => $currentRate,
+            'requiredRunRate' => $requiredRate,
+            'target' => $target === null ? null : (string) $target,
+            'projectedScore' => $projected,
+            'partnership' => $partnership ? "{$partnership['runs']} ({$partnership['balls']} balls)" : null,
+            // A finished match keeps its last batters flagged as batting, so this is for play in progress only.
+            'atCrease' => ! $live ? [] : collect($fixture->batting ?? [])
                 ->filter(fn (array $row): bool => (bool) ($row['active'] ?? false))
                 ->map(fn (array $row): array => [
-                    'name' => $names->get((int) ($row['player_id'] ?? 0), 'Player'),
+                    'name' => $sheet->name($row['player_id'] ?? null),
                     'runs' => (int) ($row['score'] ?? 0),
                     'balls' => (int) ($row['ball'] ?? 0),
+                    'fours' => (int) ($row['four_x'] ?? 0),
+                    'sixes' => (int) ($row['six_x'] ?? 0),
                 ])
+                ->values()
+                ->all(),
+            'bowler' => $bowling ? [
+                'name' => $sheet->name($bowling['player_id'] ?? null),
+                'figures' => (int) ($bowling['wickets'] ?? 0).'/'.(int) ($bowling['runs'] ?? 0).' ('.($bowling['overs'] ?? 0).' ov)',
+            ] : null,
+            'recentBalls' => $live ? $currentBalls->slice(-12)->map(fn (array $ball): string => BallByBall::mark($ball))->values()->all() : [],
+            'result' => $fixture->state() === MatchState::RESULT ? ($fixture->note ?: null) : null,
+            'toss' => $toss,
+            'playerOfMatch' => $this->awardWinner($details['playerOfMatch'] ?? null),
+            'playerOfSeries' => $this->awardWinner($details['playerOfSeries'] ?? null),
+            'officials' => $details['officials'] ?? [],
+            'series' => collect([$details['stage'] ?? null, $details['season'] ?? null])->filter()->implode(' · ') ?: null,
+            'performers' => $sheet->boards()
+                ->map(fn (string $label): array => ['team' => $teamNames[$sheet->battingTeamId($label)] ?? 'Team', ...$sheet->performers($label)])
+                ->filter(fn (array $row): bool => $row['batter'] !== null || $row['bowler'] !== null)
                 ->values()
                 ->all(),
         ];
     }
 
     /**
-     * Batting scorecards, one block per innings (S1, S2, ...).
+     * @param  array{id?: int, name?: string, image?: ?string}|null  $person
+     * @return array{name: string, image: ?string, slug: ?string}|null
+     */
+    private function awardWinner(?array $person): ?array
+    {
+        if (empty($person['name'])) {
+            return null;
+        }
+
+        return [
+            'name' => $person['name'],
+            'image' => $person['image'] ?? null,
+            'slug' => Player::query()->whereKey($person['id'] ?? 0)->value('slug'),
+        ];
+    }
+
+    /**
+     * The scorecard, one block per innings in playing order.
      *
      * @param  array<int, string>  $teamNames
      * @param  Collection<int, string>  $names
      * @return array<int, array<string, mixed>>
      */
-    private function innings(Fixture $fixture, array $teamNames, Collection $names): array
+    private function innings(MatchSheet $sheet, array $teamNames, Collection $names): array
     {
-        return collect($fixture->batting ?? [])
-            ->groupBy(fn (array $row): string => (string) ($row['scoreboard'] ?? 'S1'))
-            ->sortBy(fn (Collection $rows, string $scoreboard): int => Scoreboard::number($scoreboard))
-            ->map(function (Collection $rows) use ($teamNames, $names): array {
-                $teamId = (int) ($rows->first()['team_id'] ?? 0);
+        $seen = [];
+
+        return $sheet->boards()
+            ->map(function (string $board) use ($sheet, $teamNames, $names, &$seen): array {
+                $teamId = $sheet->battingTeamId($board);
+                $seen[$teamId] = ($seen[$teamId] ?? 0) + 1;
 
                 return [
                     'team' => $teamNames[$teamId] ?? 'Team '.$teamId,
-                    'rows' => $rows
-                        ->sortBy(fn (array $row): int => (int) ($row['sort'] ?? 0))
-                        ->map(fn (array $row): array => $this->scorecardRow($row, $names))
-                        ->values()
-                        ->all(),
+                    // 2 for a side's second innings of a first-class match.
+                    'number' => $seen[$teamId],
+                    'rows' => $sheet->battingRows($board)->map(fn (array $row): array => $this->scorecardRow($row, $names))->all(),
+                    'total' => $sheet->total($board),
+                    'extras' => $sheet->extras($board),
+                    'bowling' => $sheet->bowlingFigures($board),
+                    'fallOfWickets' => $sheet->fallOfWickets($board),
+                    'yetToBat' => $sheet->yetToBat($board),
                 ];
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Every delivery, the latest first.
+     *
+     * @param  array<int, string>  $teamNames
+     * @param  Collection<int, array<string, mixed>>  $balls
+     * @return array<int, array<string, mixed>>
+     */
+    private function commentary(MatchSheet $sheet, array $teamNames, Collection $balls): array
+    {
+        return $balls
+            ->sortBy([
+                fn (array $a, array $b): int => Scoreboard::number($b['board']) <=> Scoreboard::number($a['board']),
+                fn (array $a, array $b): int => $b['id'] <=> $a['id'],
+            ])
+            ->take(self::COMMENTARY_LIMIT)
+            ->map(fn (array $ball): array => [
+                'id' => $ball['id'],
+                'innings' => ($teamNames[$ball['team']] ?? 'Team').' innings',
+                'over' => $ball['over'],
+                'outcome' => BallByBall::mark($ball),
+                'text' => BallByBall::sentence($ball),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The newest stories that mention either side, those naming both first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function relatedNews(Request $request, Team $home, Team $away): array
+    {
+        $mentions = function (Article $article, Team $team): bool {
+            return str_contains(mb_strtolower($article->title.' '.$article->summary.' '.$article->tags), mb_strtolower($team->name));
+        };
+
+        $stories = Article::query()
+            ->visible()
+            ->with(['category', 'writer'])
+            ->where(function (Builder $query) use ($home, $away): void {
+                foreach ([$home->name, $away->name] as $name) {
+                    foreach (['title', 'summary', 'tags'] as $column) {
+                        $query->orWhere($column, 'like', '%'.$name.'%');
+                    }
+                }
+            })
+            ->latest('published_at')
+            ->limit(40)
+            ->get()
+            ->sortByDesc(fn (Article $article): int => (int) ($mentions($article, $home) && $mentions($article, $away)))
+            ->take(6)
+            ->values();
+
+        return ArticleResource::collection($stories)->resolve($request);
     }
 
     /**
@@ -208,40 +346,39 @@ class MatchDetailResource extends MatchResource
     }
 
     /**
-     * Side-by-side totals per team, taken from the innings and batting rows.
+     * Side-by-side numbers of the two teams; empty until one of them has batted.
      *
+     * @param  Collection<int, array<string, mixed>>  $balls
      * @return array<int, array{label: string, home: ?string, away: ?string}>
      */
-    private function stats(Fixture $fixture, Team $home, Team $away): array
+    private function stats(MatchSheet $sheet, Team $home, Team $away, Collection $balls): array
     {
-        $batting = collect($fixture->batting ?? []);
+        [$h, $a] = [$sheet->teamNumbers($home, $balls), $sheet->teamNumbers($away, $balls)];
 
-        $perTeam = fn (Team $team): array => [
-            'runs' => collect(Scoreboard::innings($fixture, $team->id))->sum('score'),
-            'wickets' => collect(Scoreboard::innings($fixture, $team->id))->sum('wickets'),
-            'fours' => $batting->where('team_id', $team->id)->sum('four_x'),
-            'sixes' => $batting->where('team_id', $team->id)->sum('six_x'),
-            'played' => collect(Scoreboard::innings($fixture, $team->id))->isNotEmpty(),
-        ];
-
-        [$h, $a] = [$perTeam($home), $perTeam($away)];
-
-        if (! $h['played'] && ! $a['played']) {
+        if ($h['runs'] === null && $a['runs'] === null) {
             return [];
         }
 
-        $row = fn (string $label, string $key): array => [
-            'label' => $label,
-            'home' => $h['played'] ? (string) $h[$key] : null,
-            'away' => $a['played'] ? (string) $a[$key] : null,
+        $labels = [
+            'runs' => 'Runs',
+            'wickets' => 'Wickets lost',
+            'overs' => 'Overs faced',
+            'runRate' => 'Run rate',
+            'fours' => 'Fours',
+            'sixes' => 'Sixes',
+            'boundaryRuns' => 'Runs in boundaries',
+            'dotBalls' => 'Dot balls faced',
+            'extras' => 'Extras received',
+            'topScore' => 'Top score',
+            'bestBowling' => 'Best bowling',
         ];
 
-        return [
-            $row('Runs', 'runs'),
-            $row('Wickets lost', 'wickets'),
-            $row('Fours', 'fours'),
-            $row('Sixes', 'sixes'),
-        ];
+        return collect($labels)
+            ->map(fn (string $label, string $key): array => ['label' => $label, 'home' => $h[$key], 'away' => $a[$key]])
+            // A row neither side has a figure for says nothing.
+            ->filter(fn (array $row): bool => $row['home'] !== null || $row['away'] !== null)
+            ->values()
+            ->all();
     }
 
     /**

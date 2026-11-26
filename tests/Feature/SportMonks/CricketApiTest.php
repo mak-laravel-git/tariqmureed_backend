@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Article;
 use App\Models\Fixture;
 use App\Models\League;
 use App\Models\Player;
@@ -146,7 +147,9 @@ it('returns the match centre with scorecard, squads and stats', function () {
         ->and($detail['subtitle'])->toBe('2nd T20I · Wankhede Stadium, Mumbai')
         ->and($detail['tossNote'])->toBe('India chose to bat')
         ->and($detail['overview']['currentRunRate'])->toBe('9.65')
-        ->and($detail['overview']['atCrease'])->toBe([['name' => 'Rohit Sharma', 'runs' => 35, 'balls' => 20]])
+        ->and($detail['overview']['atCrease'])->toBe([['name' => 'Rohit Sharma', 'runs' => 35, 'balls' => 20, 'fours' => 4, 'sixes' => 1]])
+        ->and($detail['overview']['projectedScore'])->toBe('193')
+        ->and($detail['overview']['bowler'])->toBe(['name' => 'Pat Cummins', 'figures' => '1/24 (3 ov)'])
         ->and($detail['innings'])->toHaveCount(1)
         ->and($detail['innings'][0]['team'])->toBe('India')
         ->and($detail['innings'][0]['rows'][0])->toBe(['batter' => 'Virat Kohli', 'dismissal' => 'c Steve Smith b Pat Cummins', 'runs' => 8, 'balls' => 10, 'fours' => 1, 'sixes' => 0, 'strikeRate' => '80.00'])
@@ -394,4 +397,125 @@ it('falls back to players young enough to be active when a team has no match on 
     $data = $this->getJson('/api/v1/teams/nepal')->assertOk()->json('data');
 
     expect(collect($data['players'])->pluck('slug')->all())->toBe(['youngster', 'unknown-age']);
+});
+
+/**
+ * A feed delivery of the India innings.
+ *
+ * @param  array<string, mixed>  $score
+ * @return array<string, mixed>
+ */
+function delivery(int $id, float $over, array $score, string $board = 'S1', int $team = 40): array
+{
+    return [
+        'id' => $id, 'scoreboard' => $board, 'ball' => $over, 'team_id' => $team,
+        'batsman' => ['fullname' => 'Rohit Sharma'], 'bowler' => ['fullname' => 'Pat Cummins'],
+        'score' => ['name' => 'No Run', 'runs' => 0, 'bye' => 0, 'leg_bye' => 0, 'noball' => 0, 'noball_runs' => 0, 'four' => false, 'six' => false, 'is_wicket' => false, 'ball' => true, 'out' => false, ...$score],
+    ];
+}
+
+it('fills every tab of a finished match from one feed call, fetched when the page is first opened', function () {
+    config(['sportmonks.token' => 'secret-token-123']);
+    cricketFixture(['id' => 500, 'slug' => 'done', ...liveScoreboard(), 'status' => 'Finished', 'is_live' => false, 'starting_at' => now()->subDay(), 'note' => 'India won by 5 runs', 'type' => 'T20I']);
+    Player::factory()->create(['id' => 11, 'slug' => 'rohit-sharma', 'fullname' => 'Rohit Sharma', 'team_id' => 40]);
+    Article::factory()->create(['title' => 'India edge Australia in a thriller', 'slug' => 'both', 'published_at' => now()->subDays(2)]);
+    Article::factory()->create(['title' => 'Australia name new captain', 'slug' => 'one', 'published_at' => now()->subHour()]);
+    Article::factory()->create(['title' => 'Unrelated county news', 'slug' => 'none', 'summary' => 'County cricket', 'tags' => 'county']);
+
+    Payloads::fake(['fixtures/500' => ['data' => Payloads::liveFixture([
+        'id' => 500, 'status' => 'Finished', 'live' => false, 'note' => 'India won by 5 runs', 'total_overs_played' => 20,
+        'balls' => ['data' => [
+            delivery(1, 0.1, ['name' => 'FOUR', 'runs' => 4, 'four' => true]),
+            delivery(2, 0.2, ['name' => '1 Wide', 'runs' => 1, 'ball' => false]),
+            delivery(3, 0.2, ['name' => 'Catch Out', 'is_wicket' => true, 'out' => true]),
+            delivery(4, 0.3, ['name' => 'No Run']),
+        ]],
+        'scoreboards' => ['data' => [
+            ['team_id' => 40, 'scoreboard' => 'S1', 'type' => 'total', 'total' => 52, 'wickets' => 1, 'overs' => 6.2],
+            ['team_id' => 40, 'scoreboard' => 'S1', 'type' => 'extra', 'wide' => 5, 'noball_balls' => 1, 'noball_runs' => 0, 'bye' => 2, 'leg_bye' => 1, 'penalty' => 0],
+        ]],
+        'manofmatch' => ['data' => ['id' => 11, 'fullname' => 'Rohit Sharma']],
+        'firstumpire' => ['data' => ['id' => 1, 'fullname' => 'Donovan Koch']],
+        'referee' => ['data' => ['id' => 2, 'fullname' => 'Javagal Srinath']],
+        'stage' => ['data' => ['name' => 'Australia tour of India']],
+        'season' => ['data' => ['name' => '2026']],
+    ])]]);
+
+    $detail = $this->getJson('/api/v1/matches/done')->assertOk()->json('data');
+    $this->getJson('/api/v1/matches/done')->assertOk();
+
+    Http::assertSentCount(1);
+
+    expect($detail['overview']['result'])->toBe('India won by 5 runs')
+        ->and($detail['overview']['atCrease'])->toBe([])
+        ->and($detail['overview']['playerOfMatch'])->toMatchArray(['name' => 'Rohit Sharma', 'slug' => 'rohit-sharma'])
+        ->and($detail['overview']['officials'])->toBe([['role' => 'Umpire', 'name' => 'Donovan Koch'], ['role' => 'Match referee', 'name' => 'Javagal Srinath']])
+        ->and($detail['overview']['series'])->toBe('Australia tour of India · 2026')
+        ->and($detail['overview']['performers'][0]['batter'])->toBe('Rohit Sharma 35 (20)')
+        ->and($detail['overview']['performers'][0]['bowler'])->toBe('Pat Cummins 1/24 (3 ov)');
+
+    $innings = $detail['innings'][0];
+
+    expect($innings['total'])->toBe(['runs' => 52, 'wickets' => 1, 'overs' => '6.2', 'runRate' => '8.21'])
+        ->and($innings['extras'])->toBe(['total' => 9, 'wides' => 5, 'noBalls' => 1, 'byes' => 2, 'legByes' => 1, 'penalty' => 0])
+        ->and($innings['bowling'][0])->toMatchArray(['bowler' => 'Pat Cummins', 'overs' => '3', 'runs' => 24, 'wickets' => 1, 'economy' => '8.00'])
+        ->and($innings['yetToBat'])->toBe([]);
+
+    expect(collect($detail['commentary'])->pluck('outcome')->all())->toBe(['•', 'W', 'Wd', '4'])
+        ->and($detail['commentary'][3])->toMatchArray(['over' => '0.1', 'innings' => 'India innings', 'text' => 'Pat Cummins to Rohit Sharma, FOUR'])
+        ->and($detail['commentary'][1]['text'])->toBe('Pat Cummins to Rohit Sharma, OUT! Catch Out');
+
+    $stats = collect($detail['stats'])->keyBy('label');
+
+    expect($stats['Dot balls faced']['home'])->toBe('2')
+        ->and($stats['Top score']['home'])->toBe('Rohit Sharma 35')
+        ->and($stats['Best bowling']['away'])->toBe('Pat Cummins 1/24')
+        ->and(collect($detail['relatedNews'])->pluck('slug')->all())->toBe(['both', 'one']);
+});
+
+it('shows the chase and the current partnership while a match is on, refreshing at most every half minute', function () {
+    config(['sportmonks.token' => 'secret-token-123']);
+    cricketFixture(['id' => 501, 'slug' => 'chase', 'status' => '2nd Innings', 'is_live' => true, 'starting_at' => now()->subHours(2), 'type' => 'T20I']);
+    Payloads::fake(['fixtures/501' => ['data' => Payloads::liveFixture([
+        'id' => 501, 'status' => '2nd Innings',
+        'runs' => [
+            ['team_id' => 41, 'inning' => 1, 'score' => 160, 'wickets' => 6, 'overs' => 20],
+            ['team_id' => 40, 'inning' => 2, 'score' => 101, 'wickets' => 2, 'overs' => 12],
+        ],
+        'batting' => [['id' => 9, 'sort' => 1, 'team_id' => 40, 'active' => true, 'scoreboard' => 'S2', 'player_id' => 11, 'ball' => 30, 'score' => 55, 'four_x' => 5, 'six_x' => 2]],
+        'balls' => ['data' => [
+            delivery(1, 11.4, ['name' => 'Catch Out', 'is_wicket' => true, 'out' => true], 'S2'),
+            delivery(2, 11.5, ['name' => 'SIX', 'runs' => 6, 'six' => true], 'S2'),
+            delivery(3, 11.6, ['name' => '4 Leg Byes', 'leg_bye' => 4], 'S2'),
+        ]],
+    ])]]);
+
+    $overview = $this->getJson('/api/v1/matches/chase')->assertOk()->json('data.overview');
+    $this->getJson('/api/v1/matches/chase')->assertOk();
+
+    Http::assertSentCount(1);
+
+    expect($overview['target'])->toBe('161')
+        ->and($overview['requiredRunRate'])->toBe('7.50')
+        ->and($overview['currentRunRate'])->toBe('8.42')
+        ->and($overview['partnership'])->toBe('10 (2 balls)')
+        ->and($overview['recentBalls'])->toBe(['W', '6', '4'])
+        ->and($overview['projectedScore'])->toBeNull();
+
+    $this->travel(31)->seconds();
+    $this->getJson('/api/v1/matches/chase')->assertOk();
+
+    Http::assertSentCount(2);
+});
+
+it('keeps showing stored data when the feed cannot be reached, and asks nothing for far-off matches', function () {
+    config(['sportmonks.token' => 'secret-token-123']);
+    cricketFixture(['id' => 502, 'slug' => 'later', 'starting_at' => now()->addDays(3)]);
+    cricketFixture(['id' => 503, 'slug' => 'broken', ...liveScoreboard(), 'status' => 'Finished', 'starting_at' => now()->subDay()]);
+    Payloads::fake(['*' => Http::response([], 500)]);
+
+    $this->getJson('/api/v1/matches/later')->assertOk();
+    Http::assertNothingSent();
+
+    $this->getJson('/api/v1/matches/broken')->assertOk()->assertJsonPath('data.innings.0.team', 'India');
 });
