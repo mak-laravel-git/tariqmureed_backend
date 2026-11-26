@@ -11,6 +11,7 @@ use App\Models\Team;
 use App\Support\LeagueSchedules;
 use App\Support\TeamColors;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 
 class SeriesController extends Controller
@@ -82,9 +83,7 @@ class SeriesController extends Controller
             'upcoming' => MatchResource::collection(
                 Fixture::query()->with($relations)->where('league_id', $league->id)->upcoming()->orderBy('starting_at')->limit(5)->get(),
             ),
-            'matches' => MatchResource::collection(
-                Fixture::query()->with($relations)->where('league_id', $league->id)->finished()->orderByDesc('starting_at')->limit(10)->get(),
-            ),
+            'matches' => MatchResource::collection($this->seriesMatches($league)),
             'pointsTable' => $standings->map(fn (Standing $row): array => [
                 'position' => $row->position,
                 'team' => $row->team?->name ?? 'Team '.$row->team_id,
@@ -100,5 +99,21 @@ class SeriesController extends Controller
             'stats' => [],
             'news' => [],
         ]]);
+    }
+
+    /**
+     * The series page's Matches tab: those being played now, then the next ones, then the latest results.
+     *
+     * @return Collection<int, Fixture>
+     */
+    private function seriesMatches(League $league): Collection
+    {
+        $fixtures = fn (): Builder => Fixture::query()
+            ->with(['league', 'localTeam', 'visitorTeam', 'venue'])
+            ->where('league_id', $league->id);
+
+        return $fixtures()->inPlay()->orderBy('starting_at')->get()
+            ->concat($fixtures()->upcoming()->orderBy('starting_at')->limit(30)->get())
+            ->concat($fixtures()->finished()->orderByDesc('starting_at')->limit(30)->get());
     }
 }

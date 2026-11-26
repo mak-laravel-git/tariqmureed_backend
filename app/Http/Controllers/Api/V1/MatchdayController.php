@@ -33,9 +33,9 @@ class MatchdayController extends Controller
             'upcoming' => $query->upcoming()->where('starting_at', '>=', now()->subHours(3)),
             'result' => $query->finished()->where('starting_at', '>=', now()->subDays(14)),
             'yesterday' => $this->between($query, $today->subDay(), $today),
-            'today' => $this->between($query, $today, $today->addDay()),
+            'today' => $this->betweenOrInPlay($query, $today, $today->addDay()),
             'tomorrow' => $this->between($query, $today->addDay(), $today->addDays(2)),
-            'week' => $this->between($query, $today, $today->addDays(7)),
+            'week' => $this->betweenOrInPlay($query, $today, $today->addDays(7)),
         };
 
         $fixtures = $query
@@ -69,6 +69,20 @@ class MatchdayController extends Controller
                 'groups' => $groups,
             ],
         ]);
+    }
+
+    /**
+     * The matches starting in the period, plus any still being played: a Test or four-day match that began on
+     * an earlier day is part of today's cricket too.
+     *
+     * @param  Builder<Fixture>  $query
+     */
+    private function betweenOrInPlay(Builder $query, CarbonInterface $from, CarbonInterface $to): void
+    {
+        $query->where(function (Builder $query) use ($from, $to): void {
+            $query->where(fn (Builder $query) => $this->between($query, $from, $to))
+                ->orWhere(fn (Builder $query) => $query->inPlay());
+        });
     }
 
     /**

@@ -262,9 +262,32 @@ it('builds the series directory and series page with a points table', function (
     expect($series['status'])->toBe('In progress')
         ->and($series['pointsTable'])->toBe([['position' => 1, 'team' => 'India', 'played' => 7, 'won' => 6, 'lost' => 1, 'noResult' => 0, 'form' => ['W', 'L', 'W'], 'points' => 12, 'netRunRate' => '+1.284']])
         ->and($series['upcoming'])->toHaveCount(2)
-        ->and($series['matches'])->toHaveCount(1)
+        ->and(array_column($series['matches'], 'slug'))->toBe(['a', 'c', 'b'])
         ->and($series['teams'])->toBe(['Australia', 'India'])
         ->and($series['dateline'])->toContain('International');
+});
+
+it('lists the matches in play first on the series matches tab', function () {
+    cricketFixture(['id' => 1, 'slug' => 'old-result', 'status' => 'Finished', 'starting_at' => now()->subDays(9)]);
+    cricketFixture(['id' => 2, 'slug' => 'new-result', 'status' => 'Finished', 'starting_at' => now()->subDays(2)]);
+    cricketFixture(['id' => 3, 'slug' => 'next', 'starting_at' => now()->addDays(2)]);
+    cricketFixture(['id' => 4, 'slug' => 'stumps', 'starting_at' => now()->subDays(2)])->forceFill(['status' => 'Stump Day 2'])->save();
+
+    expect($this->getJson('/api/v1/series/test-series')->assertOk()->json('data.matches.*.slug'))
+        ->toBe(['stumps', 'next', 'new-result', 'old-result']);
+});
+
+it('keeps a match that began on an earlier day in today and this week while it is in play', function () {
+    cricketFixture(['id' => 1, 'slug' => 'day-three', 'starting_at' => now()->subDays(2)])->forceFill(['status' => 'Stump Day 2'])->save();
+    cricketFixture(['id' => 2, 'slug' => 'over', 'status' => 'Finished', 'starting_at' => now()->subDays(2)]);
+    $other = League::factory()->create(['name' => 'Another Cup', 'slug' => 'another-cup']);
+
+    foreach (['today', 'week'] as $view) {
+        expect($this->getJson("/api/v1/matchday?view={$view}")->assertOk()->json('data.groups.*.matches.*.slug'))->toBe(['day-three']);
+    }
+
+    expect($this->getJson('/api/v1/matchday?view=tomorrow')->json('data.groups'))->toBe([])
+        ->and($this->getJson("/api/v1/matchday?view=today&competition={$other->slug}")->json('data.groups'))->toBe([]);
 });
 
 it('builds the teams list, directory, profile and fixtures', function () {
