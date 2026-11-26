@@ -229,6 +229,7 @@ it('fills in the squad of a national team that has no match in the window', func
     Team::factory()->create(['id' => 9, 'national_team' => false]);
     Payloads::fake([
         'teams/1' => ['data' => ['id' => 1, 'squad' => ['data' => [['id' => 51, 'fullname' => 'Babar Azam', 'position' => ['name' => 'Batsman']]]]]],
+        'fixtures' => ['data' => []],
     ]);
 
     $run = app(SportMonksSyncer::class)->run(SyncTarget::SQUADS);
@@ -348,4 +349,36 @@ it('runs a single target from the artisan command', function () {
 
 it('rejects an unknown sync target', function () {
     $this->artisan('sportmonks:sync', ['target' => 'nonsense'])->assertExitCode(2);
+});
+
+it('notes when players last played, from stored line-ups and from the recent matches of idle national teams', function () {
+    Team::factory()->national()->create(['id' => 1, 'name' => 'Pakistan', 'slug' => 'pakistan']);
+    Team::factory()->national()->create(['id' => 40, 'name' => 'India', 'slug' => 'india']);
+    Team::factory()->create(['id' => 90, 'national_team' => false]);
+    $stored = Player::factory()->create(['id' => 11, 'team_id' => 90]);
+    $idle = Player::factory()->create(['id' => 51, 'team_id' => 1]);
+    Fixture::factory()->create(['local_team_id' => 40, 'visitor_team_id' => 90, 'starting_at' => now()->subMonths(3), 'lineup' => [['id' => 11, 'lineup' => ['team_id' => 40]]]]);
+
+    Payloads::fake([
+        'teams/*' => ['data' => ['squad' => []]],
+        'fixtures' => ['data' => [[
+            'id' => 700,
+            'starting_at' => now()->subMonths(5)->toIso8601String(),
+            'lineup' => ['data' => [
+                ['id' => 51, 'fullname' => $idle->fullname, 'lineup' => ['team_id' => 1]],
+                ['id' => 52, 'fullname' => 'Shaheen Afridi', 'lineup' => ['team_id' => 1]],
+                ['id' => 60, 'fullname' => 'Opponent Player', 'lineup' => ['team_id' => 40]],
+            ]],
+        ]]],
+    ]);
+
+    $run = app(SportMonksSyncer::class)->run(SyncTarget::SQUADS);
+
+    expect($run->status)->toBe(SyncRun::SUCCESS)
+        ->and($stored->refresh()->team_id)->toBe(40)
+        ->and($stored->last_played_at->isSameDay(now()->subMonths(3)))->toBeTrue()
+        ->and($idle->refresh()->last_played_at->isSameDay(now()->subMonths(5)))->toBeTrue()
+        ->and(Player::query()->findOrFail(52)->team_id)->toBe(1)
+        ->and(Player::query()->find(60))->toBeNull()
+        ->and(Fixture::query()->find(700))->toBeNull();
 });

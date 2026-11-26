@@ -22,6 +22,7 @@ class Player extends Model
             'date_of_birth' => 'date',
             'career' => 'array',
             'details_synced_at' => 'datetime',
+            'last_played_at' => 'datetime',
         ];
     }
 

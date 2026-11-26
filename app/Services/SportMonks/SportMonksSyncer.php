@@ -13,8 +13,10 @@ use App\Models\SyncRun;
 use App\Models\Team;
 use App\Models\TeamRanking;
 use App\Models\Venue;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -357,6 +359,7 @@ class SportMonksSyncer
         $players = Player::query()
             ->whereIn('team_id', TeamRanking::query()->select('team_id'))
             ->where(fn (Builder $query) => $query->whereNull('details_synced_at')->orWhere('details_synced_at', '<', now()->subWeek()))
+            ->orderByRaw('last_played_at is null')
             ->orderByRaw('details_synced_at is not null')
             ->orderBy('details_synced_at')
             ->limit((int) config('sportmonks.sync.careers_per_run'))
@@ -433,6 +436,8 @@ class SportMonksSyncer
      */
     public function syncSquads(): int
     {
+        $this->recordStoredAppearances();
+
         $limit = (int) config('sportmonks.sync.squads_per_run');
 
         $pairs = Fixture::query()
@@ -468,7 +473,149 @@ class SportMonksSyncer
             $count += $this->storeSquad($body, (int) $teamId);
         }
 
-        return $count + $this->syncMissingSquads(max(0, $limit - $pairs->count()));
+        $count += $this->syncMissingSquads(max(0, $limit - $pairs->count()));
+
+        return $count + $this->syncRecentForm();
+    }
+
+    /**
+     * National squads from the feed include players long retired, so each player also carries the date of the last
+     * match they played. This fills it in from the line-ups already stored (no API call).
+     */
+    private function recordStoredAppearances(): void
+    {
+        $latest = [];
+
+        Fixture::query()
+            ->whereNotNull('lineup')
+            ->whereBetween('starting_at', [now()->subYears(2), now()])
+            ->orderBy('starting_at')
+            ->select(['id', 'starting_at', 'lineup'])
+            ->lazy(100)
+            ->each(function (Fixture $fixture) use (&$latest): void {
+                foreach ($fixture->lineup ?? [] as $row) {
+                    $playerId = (int) ($row['id'] ?? 0);
+                    $teamId = (int) data_get($row, 'lineup.team_id', 0);
+
+                    if ($playerId !== 0 && $teamId !== 0) {
+                        $latest[$playerId.'|'.$teamId] = [$playerId, $teamId, $fixture->starting_at];
+                    }
+                }
+            });
+
+        $players = Player::query()->whereIn('id', array_unique(array_column($latest, 0)))->get()->keyBy('id');
+
+        foreach ($latest as [$playerId, $teamId, $playedAt]) {
+            if ($player = $players->get($playerId)) {
+                $this->recordAppearance($player, $teamId, $playedAt);
+            }
+        }
+    }
+
+    /**
+     * National teams with no recorded appearance (no match in the fixture window, such as between series) get the
+     * line-ups of their matches of the last year and a half, a few teams per run. The matches are not stored; only
+     * who played in them.
+     */
+    private function syncRecentForm(): int
+    {
+        $count = 0;
+
+        $teams = Team::query()
+            ->where('national_team', true)
+            ->whereDoesntHave('players', fn (Builder $query) => $query->whereNotNull('last_played_at'))
+            ->orderBy('id')
+            ->pluck('id')
+            ->reject(fn (int $id): bool => Cache::has("sportmonks:form-checked:{$id}"))
+            ->take((int) config('sportmonks.sync.form_teams_per_run'));
+
+        foreach ($teams as $teamId) {
+            foreach (['localteam_id', 'visitorteam_id'] as $side) {
+                try {
+                    $rows = $this->client->paginate('fixtures', [
+                        "filter[{$side}]" => $teamId,
+                        'filter[starts_between]' => now()->subMonths(18)->toDateString().','.now()->toDateString(),
+                        'include' => 'lineup',
+                    ], 4);
+
+                    foreach ($rows as $row) {
+                        if (empty($row['starting_at'])) {
+                            continue;
+                        }
+
+                        $lineup = array_values(array_filter(
+                            $this->many($row, 'lineup'),
+                            fn (array $player): bool => (int) data_get($player, 'lineup.team_id', 0) === $teamId,
+                        ));
+
+                        $count += $this->storeLineup($lineup, Carbon::parse($row['starting_at']));
+                    }
+                } catch (SportMonksException $exception) {
+                    if ($exception->isFatal()) {
+                        throw $exception;
+                    }
+
+                    $this->notes[] = "recent matches of team {$teamId}: {$exception->getMessage()}";
+                }
+            }
+
+            // A team without any match is asked again only after a few days.
+            Cache::put("sportmonks:form-checked:{$teamId}", true, now()->addDays(3));
+        }
+
+        return $count;
+    }
+
+    /**
+     * Save the players of a match line-up and note that they played on that day.
+     *
+     * @param  array<int, array<string, mixed>>  $lineup
+     */
+    private function storeLineup(array $lineup, CarbonInterface $playedAt): int
+    {
+        $count = 0;
+
+        foreach ($lineup as $row) {
+            $teamId = (int) data_get($row, 'lineup.team_id', 0);
+
+            try {
+                if ($player = $this->upsertPlayer($row, $teamId ?: null, false)) {
+                    $this->recordAppearance($player, $teamId, $playedAt);
+                    $count++;
+                }
+            } catch (Throwable $exception) {
+                $this->notes[] = 'player '.((int) ($row['id'] ?? 0)).": {$exception->getMessage()}";
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Remember the latest match a player played. A national appearance also makes that the player's team; a club
+     * match never moves a player away from the team already on record.
+     */
+    private function recordAppearance(Player $player, int $teamId, CarbonInterface $playedAt): void
+    {
+        if ($teamId === 0 || $playedAt->isFuture()) {
+            return;
+        }
+
+        if ((int) $player->team_id !== $teamId) {
+            if (! Team::query()->whereKey($teamId)->where('national_team', true)->exists()) {
+                return;
+            }
+
+            $player->team_id = $teamId;
+        }
+
+        if ($player->last_played_at === null || $player->last_played_at->lt($playedAt)) {
+            $player->last_played_at = $playedAt;
+        }
+
+        if ($player->isDirty()) {
+            $player->save();
+        }
     }
 
     /**
@@ -517,8 +664,16 @@ class SportMonksSyncer
         $count = 0;
 
         foreach (is_array($squad) ? $squad : [] as $row) {
-            if (is_array($row) && $this->upsertPlayer($row, $teamId, true)) {
-                $count++;
+            if (! is_array($row)) {
+                continue;
+            }
+
+            try {
+                if ($this->upsertPlayer($row, $teamId, true)) {
+                    $count++;
+                }
+            } catch (Throwable $exception) {
+                $this->notes[] = 'player '.((int) ($row['id'] ?? 0)).": {$exception->getMessage()}";
             }
         }
 
@@ -618,7 +773,9 @@ class SportMonksSyncer
         $player->fill([
             'fullname' => $name,
             'image' => $row['image_path'] ?? $player->image,
-            'date_of_birth' => $row['dateofbirth'] ?? $player->date_of_birth,
+            'date_of_birth' => array_key_exists('dateofbirth', $row)
+                ? $this->validDate($row['dateofbirth'])
+                : $player->date_of_birth,
             'gender' => $row['gender'] ?? $player->gender,
             'batting_style' => $row['battingstyle'] ?? $player->batting_style,
             'bowling_style' => $row['bowlingstyle'] ?? $player->bowling_style,
@@ -697,9 +854,7 @@ class SportMonksSyncer
 
         $this->tagLeague($leagueId, $row['type'] ?? null, $local->national_team && $visitor->national_team);
 
-        foreach ($attributes['lineup'] ?? [] as $player) {
-            $this->upsertPlayer($player, (int) data_get($player, 'lineup.team_id', 0) ?: null, false);
-        }
+        $this->storeLineup($attributes['lineup'] ?? [], $fixture->starting_at);
 
         return $fixture;
     }
@@ -768,6 +923,28 @@ class SportMonksSyncer
         $extra = count($this->notes) > 3 ? ' (+'.(count($this->notes) - 3).' more)' : '';
 
         return Str::limit(implode('; ', array_slice($this->notes, 0, 3)).$extra, 500);
+    }
+
+    /**
+     * SportMonks sometimes sends placeholder birth dates (e.g. "-0001-11-30") that MySQL rejects.
+     */
+    private function validDate(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            $date = Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($date->year < 1900 || $date->isFuture()) {
+            return null;
+        }
+
+        return $date->toDateString();
     }
 
     /**

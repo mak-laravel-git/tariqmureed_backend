@@ -320,7 +320,7 @@ it('still shows a player when SportMonks is unreachable', function () {
 });
 
 it('serves the official rankings table by gender and format', function () {
-    $this->getJson('/api/v1/rankings')->assertNotFound();
+    $this->getJson('/api/v1/rankings')->assertOk()->assertJsonPath('data.tables', []);
 
     $india = Team::factory()->national()->create(['name' => 'India', 'slug' => 'india', 'code' => 'IND']);
     $australia = Team::factory()->national()->create(['name' => 'Australia', 'slug' => 'australia', 'code' => 'AUS']);
@@ -368,4 +368,30 @@ it('ranks a team\'s players by career runs and wickets and shows the team\'s pla
         ->and(collect($data['bowling']['ODI'])->pluck('slug')->all())->toBe(['strike-bowler'])
         ->and($data['bowling']['ODI'][0])->toMatchArray(['wickets' => 50, 'average' => 30.0])
         ->and($data['batting']['TEST'][0]['slug'])->toBe('top-batter');
+});
+
+it('shows the players who played recently, most recent first, and leaves retired ones out', function () {
+    $team = Team::factory()->national()->create(['name' => 'Pakistan', 'slug' => 'pakistan']);
+    $player = fn (string $slug, array $attributes) => Player::factory()->create(['team_id' => $team->id, 'slug' => $slug, 'fullname' => ucfirst($slug), ...$attributes]);
+
+    $player('abdul', ['date_of_birth' => now()->subYears(47), 'career' => [['type' => 'ODI', 'batting' => ['runs_scored' => 5000, 'innings' => 100]]]]);
+    $player('babar', ['last_played_at' => now()->subMonths(2), 'career' => [['type' => 'ODI', 'batting' => ['runs_scored' => 900, 'innings' => 20]]]]);
+    $player('zaman', ['last_played_at' => now()->subWeek()]);
+    $player('longago', ['last_played_at' => now()->subYears(3)]);
+
+    $data = $this->getJson('/api/v1/teams/pakistan')->assertOk()->json('data');
+
+    expect(collect($data['players'])->pluck('slug')->all())->toBe(['zaman', 'babar'])
+        ->and(collect($data['playerRankings']['batting']['ODI'])->pluck('slug')->all())->toBe(['babar']);
+});
+
+it('falls back to players young enough to be active when a team has no match on record', function () {
+    $team = Team::factory()->national()->create(['name' => 'Nepal', 'slug' => 'nepal']);
+    Player::factory()->create(['team_id' => $team->id, 'slug' => 'veteran', 'fullname' => 'A Veteran', 'date_of_birth' => now()->subYears(45)]);
+    Player::factory()->create(['team_id' => $team->id, 'slug' => 'youngster', 'fullname' => 'B Youngster', 'date_of_birth' => now()->subYears(22)]);
+    Player::factory()->create(['team_id' => $team->id, 'slug' => 'unknown-age', 'fullname' => 'C Unknown', 'date_of_birth' => null]);
+
+    $data = $this->getJson('/api/v1/teams/nepal')->assertOk()->json('data');
+
+    expect(collect($data['players'])->pluck('slug')->all())->toBe(['youngster', 'unknown-age']);
 });

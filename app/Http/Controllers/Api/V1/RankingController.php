@@ -12,13 +12,11 @@ class RankingController extends Controller
 {
     /**
      * The official team rankings: every format, men's and women's, each table in order of position.
-     * 404 until the first sync has stored them, so the website keeps its sample table until then.
+     * The tables are empty until the first sync has stored them; the website then says they are not available.
      */
     public function __invoke(Request $request): JsonResponse
     {
         $rankings = TeamRanking::query()->with('team')->orderBy('position')->get();
-
-        abort_if($rankings->isEmpty(), 404);
 
         $tables = [];
 
@@ -43,7 +41,7 @@ class RankingController extends Controller
         return response()->json(['data' => [
             'formats' => collect(TeamRanking::FORMATS)->map(fn (string $label, string $key): array => ['key' => $key, 'label' => $label])->values(),
             'updatedAt' => $rankings->max('updated_at')?->toIso8601String(),
-            'tables' => $tables,
+            'tables' => (object) $tables,
         ]]);
     }
 }

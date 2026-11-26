@@ -6,16 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\MatchResource;
 use App\Http\Resources\Api\V1\TeamSummaryResource;
 use App\Models\Fixture;
+use App\Models\Player;
 use App\Models\Team;
 use App\Models\TeamRanking;
 use App\Models\Venue;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
 
 class TeamController extends Controller
 {
+    /** Without any match on record, players older than this are taken to have retired. */
+    private const OLDEST_ACTIVE_AGE = 38;
+
     /**
      * Teams that appear in the synced fixtures.
      */
@@ -56,6 +61,7 @@ class TeamController extends Controller
     public function show(string $slug): JsonResponse
     {
         $team = Team::query()->where('slug', $slug)->firstOrFail();
+        $squad = $this->currentPlayers($team);
 
         return response()->json(['data' => [
             'slug' => $team->slug,
@@ -67,8 +73,8 @@ class TeamController extends Controller
             'nickname' => $team->name,
             'image' => $team->image ?: null,
             'ranks' => [...$this->iccRanks($team), ...$this->record($team)],
-            'playerRankings' => $this->playerRankings($team),
-            'players' => $team->players()->orderBy('fullname')->limit(12)->get()->map(fn ($player): array => [
+            'playerRankings' => $this->playerRankings($squad),
+            'players' => $squad->take(40)->map(fn (Player $player): array => [
                 'slug' => $player->slug,
                 'name' => $player->fullname,
                 'role' => $player->position ?? 'Player',
@@ -130,17 +136,45 @@ class TeamController extends Controller
     }
 
     /**
+     * The players who make up the team today: those who played for it in the last two years, most recent first.
+     * The feed's squads also list retired players, so a team with no match on record shows only those young enough
+     * to be still playing.
+     *
+     * @return Collection<int, Player>
+     */
+    private function currentPlayers(Team $team): Collection
+    {
+        $recent = $team->players()
+            ->where('last_played_at', '>=', now()->subYears(2))
+            ->orderByDesc('last_played_at')
+            ->orderBy('fullname')
+            ->get();
+
+        if ($recent->isNotEmpty()) {
+            return $recent;
+        }
+
+        return $team->players()
+            ->where(fn (Builder $query) => $query
+                ->whereNull('date_of_birth')
+                ->orWhere('date_of_birth', '>=', now()->subYears(self::OLDEST_ACTIVE_AGE)))
+            ->orderBy('fullname')
+            ->get();
+    }
+
+    /**
      * The team's leading batters (by career runs) and bowlers (by career wickets) in each format, taken from the
      * career statistics stored for its players. Formats with no figures are left out.
      *
+     * @param  Collection<int, Player>  $squad
      * @return array{formats: array<int, array{key: string, label: string}>, batting: array<string, array<int, array<string, mixed>>>, bowling: array<string, array<int, array<string, mixed>>>}
      */
-    private function playerRankings(Team $team): array
+    private function playerRankings(Collection $squad): array
     {
         $batting = [];
         $bowling = [];
 
-        foreach ($team->players()->whereNotNull('career')->get() as $player) {
+        foreach ($squad->whereNotNull('career') as $player) {
             foreach (collect($player->career)->groupBy(fn (array $row): string => strtoupper((string) ($row['type'] ?? '')))->except('') as $format => $rows) {
                 $innings = $rows->sum(fn (array $row): int => (int) data_get($row, 'batting.innings', 0));
                 $notOuts = $rows->sum(fn (array $row): int => (int) data_get($row, 'batting.not_outs', 0));
