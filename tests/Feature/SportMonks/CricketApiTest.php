@@ -519,3 +519,16 @@ it('keeps showing stored data when the feed cannot be reached, and asks nothing 
 
     $this->getJson('/api/v1/matches/broken')->assertOk()->assertJsonPath('data.innings.0.team', 'India');
 });
+
+it('leaves out boundary figures when the feed sends only the totals', function () {
+    cricketFixture(['id' => 504, 'slug' => 'totals-only', 'status' => 'Finished', 'starting_at' => now()->subDay(), 'runs' => [
+        ['team_id' => 40, 'inning' => 1, 'score' => 313, 'wickets' => 6, 'overs' => 48.4],
+        ['team_id' => 41, 'inning' => 2, 'score' => 309, 'wickets' => 10, 'overs' => 49.2],
+    ]]);
+
+    $detail = $this->getJson('/api/v1/matches/totals-only')->assertOk()->json('data');
+
+    expect(collect($detail['stats'])->pluck('label')->all())->toBe(['Runs', 'Wickets lost', 'Overs faced', 'Run rate'])
+        ->and($detail['innings'])->toBe([])
+        ->and($detail['squads'])->toBe([]);
+});

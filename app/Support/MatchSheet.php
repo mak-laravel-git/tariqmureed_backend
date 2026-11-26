@@ -229,8 +229,9 @@ final class MatchSheet
             'wickets' => $when($played, (int) $innings->sum('wickets')),
             'overs' => $when($played && $legalBalls > 0, intdiv($legalBalls, 6).($legalBalls % 6 ? '.'.($legalBalls % 6) : '')),
             'runRate' => $when($played && $legalBalls > 0, number_format($runs / max($legalBalls, 1) * 6, 2, '.', '')),
-            'fours' => $when($played, $fours),
-            'sixes' => $when($played, $sixes),
+            // Without batting rows the boundaries are unknown, not nil.
+            'fours' => $when($played && $batting->isNotEmpty(), $fours),
+            'sixes' => $when($played && $batting->isNotEmpty(), $sixes),
             'boundaryRuns' => $when($played && $batting->isNotEmpty(), $fours * 4 + $sixes * 6),
             'dotBalls' => $when($faced->isNotEmpty(), BallByBall::dotBalls($faced)),
             'extras' => $when($played && $batting->isNotEmpty(), max($runs - (int) $batting->sum('score'), 0)),
