@@ -8,17 +8,15 @@ use App\Models\Writer;
 use Illuminate\Database\Seeder;
 
 /**
- * Sample categories, authors and stories, so the public news pages are never empty.
+ * Sample categories, authors and stories, so editors have something to work from in the dashboard.
  *
  * Pictures are taken from the media library (MediaLibrarySeeder runs first). Safe to run again:
  * anything that already exists (matched by name or slug) is left exactly as the editors changed it.
- * Every sample story says so in its internal notes, so it is easy to find and replace with real
- * reporting from the admin dashboard.
+ * Every sample story says so in its internal notes (Article::SAMPLE_NOTE) and stays off the public
+ * site until an editor rewrites it.
  */
 class ContentSeeder extends Seeder
 {
-    private const NOTE = 'Sample story added by ContentSeeder. Edit or delete it from the dashboard.';
-
     /** @var array<int, array{name: string, slug: string, title: string, bio: string, avatar: string, since: int}> */
     private const WRITERS = [
         ['name' => 'Arif Hossain', 'slug' => 'arif-hossain', 'title' => 'Senior Cricket Correspondent', 'bio' => 'Arif has covered four World Cups and reported from 38 Test venues. He leads TMN Sport\'s subcontinent coverage and writes the weekly match column.', 'avatar' => '/images/writers/arif-hossain.jpg', 'since' => 2016],
@@ -141,7 +139,7 @@ class ContentSeeder extends Seeder
                     'status' => Article::PUBLISHED,
                     'published_at' => now()->subMinutes($minutesAgo),
                     'views' => $views,
-                    'notes' => self::NOTE,
+                    'notes' => Article::SAMPLE_NOTE,
                 ],
             );
 
@@ -170,7 +168,7 @@ class ContentSeeder extends Seeder
         }
 
         return implode("\n\n", [
-            rtrim($summary, '.') . '.',
+            rtrim($summary, '.').'.',
             'This is a sample story that keeps the news pages full until your own reporting is published. Replace this text from the Content Management section of the admin dashboard.',
             '## Why it matters',
             'Write the key facts, the context and the numbers here, one idea per paragraph, with a blank line between paragraphs.',

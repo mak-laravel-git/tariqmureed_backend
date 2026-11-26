@@ -24,7 +24,22 @@ class Article extends Model
 
     public const ARCHIVED = 'Archived';
 
+    /** The internal note ContentSeeder leaves on its made-up stories, which the public site never shows. */
+    public const SAMPLE_NOTE = 'Sample story added by ContentSeeder. Edit or delete it from the dashboard.';
+
     protected $guarded = [];
+
+    /**
+     * A sample story whose headline or text an editor rewrites is real reporting from then on.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (Article $article): void {
+            if ($article->notes === self::SAMPLE_NOTE && $article->isDirty(['title', 'body'])) {
+                $article->notes = null;
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -37,7 +52,8 @@ class Article extends Model
     }
 
     /**
-     * Articles visitors can read: published, or scheduled for a time that has passed.
+     * Articles visitors can read: published, or scheduled for a time that has passed. Sample stories stay in
+     * the dashboard only.
      *
      * @param  Builder<Article>  $query
      * @return Builder<Article>
@@ -46,7 +62,8 @@ class Article extends Model
     {
         return $query
             ->whereIn('status', [self::PUBLISHED, self::SCHEDULED])
-            ->where('published_at', '<=', now());
+            ->where('published_at', '<=', now())
+            ->where(fn (Builder $query) => $query->whereNull('notes')->orWhere('notes', '!=', self::SAMPLE_NOTE));
     }
 
     /**
