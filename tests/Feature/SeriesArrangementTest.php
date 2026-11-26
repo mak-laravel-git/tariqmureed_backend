@@ -91,3 +91,16 @@ it('shows the website only the visible competitions, in the chosen order, new on
     $directory = collect($this->getJson('/api/v1/series')->assertOk()->json('data.items'))->pluck('name')->all();
     expect($directory)->toBe(['Zeta Cup']);
 });
+
+it('lists series as shown or hidden and filters by those tabs', function () {
+    League::factory()->create(['name' => 'Shown League', 'is_featured' => true]);
+    League::factory()->create(['name' => 'Hidden League', 'is_featured' => false]);
+    signInAs(RoleEnum::ADMIN);
+
+    $this->getJson('/api/v1/admin/competitions')->assertOk()->assertJsonCount(2, 'data');
+    $this->getJson('/api/v1/admin/competitions?tab=active')->assertOk()->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Shown League')->assertJsonPath('data.0.status', 'Shown on website');
+    $this->getJson('/api/v1/admin/competitions?tab=archived')->assertOk()->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Hidden League')->assertJsonPath('data.0.status', 'Hidden from website');
+    $this->getJson('/api/v1/admin/competitions?tab=pending')->assertOk()->assertJsonCount(0, 'data');
+});

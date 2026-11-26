@@ -14,6 +14,8 @@ enum SyncTarget: string
     case SQUADS = 'squads';
     case STANDINGS = 'standings';
     case DETAILS = 'details';
+    case RANKINGS = 'rankings';
+    case CAREERS = 'careers';
     case LIVE = 'live';
     case ALL = 'all';
 
@@ -24,7 +26,7 @@ enum SyncTarget: string
      */
     public static function fullSync(): array
     {
-        return [self::LEAGUES, self::VENUES, self::TEAMS, self::FIXTURES, self::SQUADS, self::STANDINGS, self::DETAILS];
+        return [self::LEAGUES, self::VENUES, self::TEAMS, self::FIXTURES, self::SQUADS, self::STANDINGS, self::DETAILS, self::RANKINGS];
     }
 
     public function label(): string
@@ -37,6 +39,8 @@ enum SyncTarget: string
             self::SQUADS => 'Squads & players',
             self::STANDINGS => 'League standings',
             self::DETAILS => 'Scorecards',
+            self::RANKINGS => 'ICC team rankings',
+            self::CAREERS => 'Player career statistics',
             self::LIVE => 'Live scores',
             self::ALL => 'Full sync',
         };

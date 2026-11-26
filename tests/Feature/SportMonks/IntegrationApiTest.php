@@ -110,5 +110,5 @@ it('registers the sync schedule only through the artisan command', function () {
         ->map(fn ($event): string => (string) $event->command)
         ->filter(fn (string $command): bool => str_contains($command, 'sportmonks:sync'));
 
-    expect($events)->toHaveCount(9);
+    expect($events)->toHaveCount(11);
 });

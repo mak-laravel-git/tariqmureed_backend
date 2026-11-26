@@ -5,6 +5,7 @@ use App\Models\League;
 use App\Models\Player;
 use App\Models\Standing;
 use App\Models\Team;
+use App\Models\TeamRanking;
 use App\Models\Venue;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\SportMonksPayloads as Payloads;
@@ -77,6 +78,23 @@ it('sends each team logo so the site can draw it where there is no country flag'
         ->assertJsonPath('data.0.away.team.image', null);
 
     $this->getJson('/api/v1/teams')->assertOk()->assertJsonFragment(['slug' => 'india', 'image' => 'https://cdn.sportmonks.com/images/cricket/teams/8/40.png']);
+});
+
+it('shows a team profile with its match record', function () {
+    cricketFixture(['id' => 1, 'slug' => 'a', 'status' => 'Finished', 'starting_at' => now()->subDays(3), 'winner_team_id' => 40]);
+    cricketFixture(['id' => 2, 'slug' => 'b', 'status' => 'Finished', 'starting_at' => now()->subDays(2), 'winner_team_id' => 41]);
+    cricketFixture(['id' => 3, 'slug' => 'c', 'status' => 'Finished', 'starting_at' => now()->subDay(), 'winner_team_id' => null]);
+    cricketFixture(['id' => 4, 'slug' => 'd']);
+
+    $this->getJson('/api/v1/teams/india')
+        ->assertOk()
+        ->assertJsonPath('data.ranks.0', ['label' => 'Matches played', 'value' => '3'])
+        ->assertJsonPath('data.ranks.1', ['label' => 'Won', 'value' => '1'])
+        ->assertJsonPath('data.ranks.2', ['label' => 'Lost', 'value' => '1'])
+        ->assertJsonPath('data.ranks.3', ['label' => 'No result', 'value' => '1']);
+
+    Team::factory()->national()->create(['id' => 77, 'name' => 'Nepal', 'slug' => 'nepal']);
+    $this->getJson('/api/v1/teams/nepal')->assertOk()->assertJsonPath('data.ranks', [])->assertJsonPath('data.players', []);
 });
 
 it('filters matches by state and treats breaks as live', function () {
@@ -299,4 +317,55 @@ it('still shows a player when SportMonks is unreachable', function () {
     Http::fake(['*' => Http::response([], 500)]);
 
     $this->getJson('/api/v1/players/someone')->assertOk()->assertJsonPath('data.career', []);
+});
+
+it('serves the official rankings table by gender and format', function () {
+    $this->getJson('/api/v1/rankings')->assertNotFound();
+
+    $india = Team::factory()->national()->create(['name' => 'India', 'slug' => 'india', 'code' => 'IND']);
+    $australia = Team::factory()->national()->create(['name' => 'Australia', 'slug' => 'australia', 'code' => 'AUS']);
+    TeamRanking::factory()->create(['team_id' => $australia->id, 'format' => 'TEST', 'gender' => 'men', 'position' => 2, 'rating' => 110]);
+    TeamRanking::factory()->create(['team_id' => $india->id, 'format' => 'TEST', 'gender' => 'men', 'position' => 1, 'rating' => 120]);
+    TeamRanking::factory()->create(['team_id' => $india->id, 'format' => 'ODI', 'gender' => 'women', 'position' => 3]);
+
+    $data = $this->getJson('/api/v1/rankings')->assertOk()
+        ->assertJsonPath('data.formats.0', ['key' => 'TEST', 'label' => 'Test'])
+        ->assertJsonPath('data.tables.men.TEST.0.team.slug', 'india')
+        ->assertJsonPath('data.tables.men.TEST.0.position', 1)
+        ->assertJsonPath('data.tables.men.TEST.1.team.slug', 'australia')
+        ->assertJsonPath('data.tables.women.ODI.0.position', 3)
+        ->json('data');
+
+    expect($data['tables']['men'])->not->toHaveKey('ODI')
+        ->and($data['updatedAt'])->toContain('T');
+});
+
+it('ranks a team\'s players by career runs and wickets and shows the team\'s place in each table', function () {
+    $team = Team::factory()->national()->create(['name' => 'India', 'slug' => 'india']);
+    TeamRanking::factory()->create(['team_id' => $team->id, 'format' => 'TEST', 'gender' => 'men', 'position' => 3]);
+    TeamRanking::factory()->create(['team_id' => $team->id, 'format' => 'ODI', 'gender' => 'men', 'position' => 1]);
+
+    $career = fn (string $type, int $runs, int $innings, int $notOuts, int $wickets = 0, int $conceded = 0): array => [
+        'type' => $type,
+        'batting' => ['matches' => 10, 'innings' => $innings, 'not_outs' => $notOuts, 'runs_scored' => $runs, 'hundreds' => 2, 'highest_inning_score' => 120],
+        'bowling' => ['matches' => 10, 'wickets' => $wickets, 'runs' => $conceded, 'five_wickets' => 1],
+    ];
+
+    Player::factory()->create(['team_id' => $team->id, 'fullname' => 'Top Batter', 'slug' => 'top-batter', 'career' => [$career('ODI', 1000, 22, 2), $career('ODI', 500, 10, 0), $career('TEST', 300, 6, 0)]]);
+    Player::factory()->create(['team_id' => $team->id, 'fullname' => 'Second Batter', 'slug' => 'second-batter', 'career' => [$career('ODI', 800, 20, 0)]]);
+    Player::factory()->create(['team_id' => $team->id, 'fullname' => 'Strike Bowler', 'slug' => 'strike-bowler', 'career' => [$career('ODI', 0, 0, 0, 50, 1500)]]);
+    Player::factory()->create(['team_id' => $team->id, 'fullname' => 'No Data', 'slug' => 'no-data', 'career' => null]);
+
+    $data = $this->getJson('/api/v1/teams/india')->assertOk()
+        ->assertJsonPath('data.ranks.0', ['label' => 'Test ranking', 'value' => '#3'])
+        ->assertJsonPath('data.ranks.1', ['label' => 'ODI ranking', 'value' => '#1'])
+        ->json('data.playerRankings');
+
+    expect(collect($data['formats'])->pluck('key')->all())->toBe(['TEST', 'ODI'])
+        ->and(collect($data['batting']['ODI'])->pluck('slug')->all())->toBe(['top-batter', 'second-batter'])
+        ->and($data['batting']['ODI'][0])->toMatchArray(['rank' => 1, 'runs' => 1500, 'matches' => 20, 'average' => 50.0, 'hundreds' => 4])
+        ->and($data['batting']['ODI'][1]['rank'])->toBe(2)
+        ->and(collect($data['bowling']['ODI'])->pluck('slug')->all())->toBe(['strike-bowler'])
+        ->and($data['bowling']['ODI'][0])->toMatchArray(['wickets' => 50, 'average' => 30.0])
+        ->and($data['batting']['TEST'][0]['slug'])->toBe('top-batter');
 });
