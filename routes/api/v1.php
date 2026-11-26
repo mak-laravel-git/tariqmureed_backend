@@ -147,6 +147,8 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
     Route::get('media', [AdminMediaController::class, 'index'])->middleware('can:media.index')->name('media.index');
     Route::post('media', [AdminMediaController::class, 'store'])->middleware('can:media.create')->name('media.store');
     Route::delete('media/{id}', [AdminMediaController::class, 'destroy'])->middleware('can:media.delete')->name('media.destroy');
+    Route::get('media/source', [AdminMediaController::class, 'source'])->middleware('can:media.index')->name('media.source');
+    Route::post('media/{id}/crop', [AdminMediaController::class, 'crop'])->middleware('can:media.create')->name('media.crop');
 
     Route::get('activity-logs', [AdminActivityLogController::class, 'index'])->middleware('can:activity.index')->name('activity-logs.index');
     Route::get('activity-logs/{id}', [AdminActivityLogController::class, 'show'])->middleware('can:activity.index')->name('activity-logs.show');
