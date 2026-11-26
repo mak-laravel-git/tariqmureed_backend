@@ -22,7 +22,7 @@ class TeamSummaryResource extends JsonResource
             'name' => $this->name,
             'shortName' => $this->shortName(),
             'colors' => $this->colors(),
-            'image' => $this->image ?: null,
+            'image' => $this->logo(),
         ];
     }
 }

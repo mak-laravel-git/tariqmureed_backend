@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\RankingController;
 use App\Http\Controllers\Api\V1\SeoController;
 use App\Http\Controllers\Api\V1\SeriesController;
 use App\Http\Controllers\Api\V1\SiteSettingsController;
+use App\Http\Controllers\Api\V1\StatsController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\TickerController;
 use App\Http\Controllers\Api\V1\WriterController;
@@ -95,6 +96,8 @@ Route::get('articles', [ArticleController::class, 'index'])->name('articles.inde
 Route::get('articles/{slug}', [ArticleController::class, 'show'])->name('articles.show');
 Route::get('news', NewsController::class)->name('news');
 Route::get('rankings', RankingController::class)->name('rankings');
+Route::get('stats', [StatsController::class, 'stats'])->name('stats');
+Route::get('records', [StatsController::class, 'records'])->name('records');
 Route::get('writers', [WriterController::class, 'index'])->name('writers.index');
 Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
 Route::get('writers/{slug}/articles', [WriterController::class, 'articles'])->name('writers.articles');

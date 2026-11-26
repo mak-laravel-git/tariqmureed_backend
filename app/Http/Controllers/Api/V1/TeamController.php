@@ -43,7 +43,7 @@ class TeamController extends Controller
             'name' => $team->name,
             'badge' => $team->shortName(),
             'colors' => $team->colors(),
-            'image' => $team->image ?: null,
+            'image' => $team->logo(),
             'status' => $inPlay->contains($team->id) ? 'In progress' : 'Upcoming',
             'description' => $team->national_team ? 'International cricket team' : 'Domestic cricket team',
             'group' => $team->national_team ? 'international' : 'domestic',
@@ -71,7 +71,7 @@ class TeamController extends Controller
             'kind' => $team->national_team ? 'International team' : 'Domestic team',
             'membership' => $team->national_team ? 'National side' : 'Club side',
             'nickname' => $team->name,
-            'image' => $team->image ?: null,
+            'image' => $team->logo(),
             'ranks' => [...$this->iccRanks($team), ...$this->record($team)],
             'playerRankings' => $this->playerRankings($squad),
             'players' => $squad->take(40)->map(fn (Player $player): array => [

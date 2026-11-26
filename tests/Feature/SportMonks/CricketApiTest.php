@@ -532,3 +532,15 @@ it('leaves out boundary figures when the feed sends only the totals', function (
         ->and($detail['innings'])->toBe([])
         ->and($detail['squads'])->toBe([]);
 });
+
+it('sends league logos, and no picture for a placeholder side', function () {
+    cricketFixture(['id' => 600, 'slug' => 'final', 'starting_at' => now()->addDays(2)]);
+    League::query()->find(3)->forceFill(['image' => 'https://cdn.sportmonks.com/images/cricket/leagues/3/3.png', 'is_featured' => true])->save();
+    Team::query()->find(41)->forceFill(['name' => 'TBC', 'image' => 'https://cdn.sportmonks.com'])->save();
+
+    $this->getJson('/api/v1/series')->assertOk()->assertJsonPath('data.items.0.image', 'https://cdn.sportmonks.com/images/cricket/leagues/3/3.png');
+    $this->getJson('/api/v1/series/test-series')->assertOk()
+        ->assertJsonPath('data.image', 'https://cdn.sportmonks.com/images/cricket/leagues/3/3.png')
+        ->assertJsonPath('data.teams', ['India']);
+    $this->getJson('/api/v1/matches/final')->assertOk()->assertJsonPath('data.away.team.image', null);
+});

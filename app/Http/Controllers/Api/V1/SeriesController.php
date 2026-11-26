@@ -34,6 +34,7 @@ class SeriesController extends Controller
                 'name' => $league->name,
                 'badge' => TeamColors::shortName($league->name, $league->code),
                 'colors' => TeamColors::for($league->name),
+                'image' => $league->logo(),
                 'status' => $schedules[$league->id]['status'],
                 'description' => trim(($league->category ?? 'Cricket').' '.($league->format ?? '').' series'),
                 'group' => $schedules[$league->id]['group'],
@@ -72,6 +73,7 @@ class SeriesController extends Controller
             'slug' => $league->slug,
             'name' => $league->name,
             'abbreviation' => TeamColors::shortName($league->name, $league->code),
+            'image' => $league->logo(),
             'status' => $schedule['status'] ?? 'Completed',
             'dateline' => $schedule
                 ? LeagueSchedules::dateRange($schedule['first'], $schedule['last']).($league->category ? " · {$league->category}" : '')
@@ -94,7 +96,7 @@ class SeriesController extends Controller
                 'points' => $row->points,
                 'netRunRate' => sprintf('%+.3f', $row->net_run_rate),
             ])->values(),
-            'teams' => Team::query()->whereIn('id', $teamIds)->orderBy('name')->pluck('name')->values(),
+            'teams' => Team::query()->whereIn('id', $teamIds)->whereNotIn('name', ['TBC', 'TBA'])->orderBy('name')->pluck('name')->values(),
             'stats' => [],
             'news' => [],
         ]]);

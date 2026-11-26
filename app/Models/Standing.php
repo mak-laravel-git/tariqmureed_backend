@@ -23,6 +23,14 @@ class Standing extends Model
     }
 
     /**
+     * @return BelongsTo<League, $this>
+     */
+    public function league(): BelongsTo
+    {
+        return $this->belongsTo(League::class);
+    }
+
+    /**
      * @return BelongsTo<Team, $this>
      */
     public function team(): BelongsTo

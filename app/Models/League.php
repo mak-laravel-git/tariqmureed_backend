@@ -19,6 +19,15 @@ class League extends Model
 
     protected $guarded = [];
 
+    /**
+     * The logo from the data feed, or null when there is none. Placeholder sides (such as "TBC") come with the
+     * bare image host and no file, which would show as a broken picture.
+     */
+    public function logo(): ?string
+    {
+        return is_string($this->image) && preg_match('#\.(png|jpe?g|gif|webp|svg)(\?.*)?$#i', $this->image) === 1 ? $this->image : null;
+    }
+
     protected function casts(): array
     {
         return [
