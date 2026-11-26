@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RoleEnum;
+use App\Models\Article;
 use App\Models\SitePage;
 use App\Models\User;
 use App\Support\LegalPageContent;
@@ -215,4 +216,21 @@ it('lets the SportMonks admin page reach the integration under the admin prefix'
     actingAsStaff();
 
     $this->getJson('/api/v1/admin/integrations/sportmonks')->assertOk()->assertJsonPath('data.provider', 'SportMonks');
+});
+
+it('swaps a developer computer address in saved pictures for the real API address', function () {
+    config(['app.url' => 'https://api.example.test']);
+    $article = Article::factory()->create(['slug' => 'local-picture', 'image' => 'http://localhost:8000/storage/media/seeded/news/wp/one.webp']);
+    $article->forceFill(['gallery' => ['http://127.0.0.1:8000/storage/media/two.webp', 'https://cdn.example.com/three.webp']])->save();
+
+    $this->getJson('/api/v1/articles/local-picture')->assertOk()
+        ->assertJsonPath('data.image', 'https://api.example.test/storage/media/seeded/news/wp/one.webp')
+        ->assertJsonPath('data.gallery', ['https://api.example.test/storage/media/two.webp', 'https://cdn.example.com/three.webp']);
+});
+
+it('leaves local addresses alone while the API itself runs locally', function () {
+    config(['app.url' => 'http://localhost:8000']);
+    Article::factory()->create(['slug' => 'local-run', 'image' => 'http://localhost:8000/storage/media/one.webp']);
+
+    $this->getJson('/api/v1/articles/local-run')->assertOk()->assertJsonPath('data.image', 'http://localhost:8000/storage/media/one.webp');
 });
