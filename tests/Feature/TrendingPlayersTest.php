@@ -9,7 +9,7 @@ use App\Models\Team;
  *
  * @return array<string, mixed>
  */
-function careerRow(string $format, int $runs, int $matches = 10, int $innings = 10, int $notOuts = 0): array
+function trendingCareerRow(string $format, int $runs, int $matches = 10, int $innings = 10, int $notOuts = 0): array
 {
     return [
         'type' => $format,
@@ -30,7 +30,7 @@ function listedPlayer(string $name, int $runs = 100, array $attributes = []): Pl
         'fullname' => $name,
         'slug' => $slug,
         'image' => "https://cdn.sportmonks.com/images/cricket/players/1/{$slug}.png",
-        'career' => [careerRow('ODI', $runs)],
+        'career' => [trendingCareerRow('ODI', $runs)],
         ...$attributes,
     ]);
 }
@@ -41,9 +41,9 @@ it('returns the card in the website contract shape', function () {
         'id' => 8,
         'team_id' => $pakistan->id,
         'career' => [
-            careerRow('ODI', 300, matches: 6, innings: 6, notOuts: 1),
-            careerRow('ODI', 201, matches: 5, innings: 5),
-            careerRow('T20I', 999),
+            trendingCareerRow('ODI', 300, matches: 6, innings: 6, notOuts: 1),
+            trendingCareerRow('ODI', 201, matches: 5, innings: 5),
+            trendingCareerRow('T20I', 999),
         ],
     ]);
 
@@ -115,7 +115,7 @@ it('leaves out a player without a real photo', function (?string $image) {
 ]);
 
 it('shows T20I figures when a player has no one-day runs', function () {
-    listedPlayer('Short Format', attributes: ['career' => [careerRow('T20I', 450, matches: 12, innings: 12, notOuts: 3)]]);
+    listedPlayer('Short Format', attributes: ['career' => [trendingCareerRow('T20I', 450, matches: 12, innings: 12, notOuts: 3)]]);
 
     $this->getJson('/api/v1/players/trending')
         ->assertOk()
@@ -133,7 +133,7 @@ it('leaves out a player without one-day or T20I runs', function (?array $career)
         ->assertExactJson(['data' => []]);
 })->with([
     'no career yet' => [null],
-    'domestic matches only' => [[careerRow('T20', 800)]],
+    'domestic matches only' => [[trendingCareerRow('T20', 800)]],
 ]);
 
 it('names a franchise as the team rather than the country', function () {
