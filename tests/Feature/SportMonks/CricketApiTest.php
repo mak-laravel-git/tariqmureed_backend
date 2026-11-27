@@ -331,7 +331,11 @@ it('shows a player and fetches the career once from SportMonks', function () {
     expect($page['name'])->toBe('Rohit Sharma')
         ->and($page['teamAndRole'])->toBe('India · Batsman')
         ->and($page['facts'])->toContain(['label' => 'Batting style', 'value' => 'Right hand bat'], ['label' => 'Born', 'value' => '30 April 1987'])
-        ->and($page['career'])->toBe([['format' => 'T20I', 'matches' => 15, 'runs' => '560', 'average' => '43.08', 'hundreds' => 1, 'highScore' => '100']])
+        ->and($page['career'])->toBe([[
+            'format' => 'T20I', 'matches' => 15, 'innings' => 15, 'notOuts' => 2, 'runs' => '560', 'average' => '43.08',
+            'strikeRate' => '—', 'hundreds' => 1, 'fifties' => 0, 'fours' => 0, 'sixes' => 0, 'highScore' => '100',
+        ]])
+        ->and($page['bowling'])->toBe([])
         ->and($page['news'])->toBe([]);
 
     Http::assertSentCount(1);
