@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Admin\ArticleController as AdminArticleControlle
 use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\CompetitionController as AdminCompetitionController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Api\V1\Admin\HomeTeamController as AdminHomeTeamController;
 use App\Http\Controllers\Api\V1\Admin\MediaController as AdminMediaController;
 use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\V1\Admin\ProfileController as AdminProfileController;
@@ -72,6 +73,7 @@ Route::get('series/{slug}', [SeriesController::class, 'show'])->name('series.sho
 
 Route::get('teams', [TeamController::class, 'index'])->name('teams.index');
 Route::get('teams/directory', [TeamController::class, 'directory'])->name('teams.directory');
+Route::get('teams/home', [TeamController::class, 'home'])->name('teams.home');
 Route::get('teams/{slug}', [TeamController::class, 'show'])->name('teams.show');
 Route::get('teams/{slug}/fixtures', [TeamController::class, 'fixtures'])->name('teams.fixtures');
 
@@ -159,6 +161,9 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
     Route::get('competitions/arrangement', [AdminCompetitionController::class, 'arrangement'])->middleware('can:settings.view')->name('competitions.arrangement');
     Route::put('competitions/arrangement', [AdminCompetitionController::class, 'arrange'])->middleware('can:settings.edit')->name('competitions.arrange');
     Route::get('competitions/{id}', [AdminCompetitionController::class, 'show'])->middleware('can:integrations.view')->name('competitions.show');
+
+    Route::get('home-teams', [AdminHomeTeamController::class, 'index'])->middleware('can:settings.view')->name('home-teams.index');
+    Route::put('home-teams', [AdminHomeTeamController::class, 'update'])->middleware('can:settings.edit')->name('home-teams.update');
 
     Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
         ->controller(SportMonksIntegrationController::class)

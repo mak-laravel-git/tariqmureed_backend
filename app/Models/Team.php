@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\TeamColors;
 use Database\Factories\TeamFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,6 +31,18 @@ class Team extends Model
     public function players(): HasMany
     {
         return $this->hasMany(Player::class);
+    }
+
+    /**
+     * Teams that appear in the synced fixtures.
+     *
+     * @param  Builder<Team>  $query
+     */
+    public function scopePlaying(Builder $query): void
+    {
+        $query->where(fn (Builder $inner) => $inner
+            ->whereIn('id', Fixture::query()->select('local_team_id'))
+            ->orWhereIn('id', Fixture::query()->select('visitor_team_id')));
     }
 
     public function shortName(): string
