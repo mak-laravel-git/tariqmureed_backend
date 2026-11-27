@@ -10,6 +10,7 @@ use App\Models\Player;
 use App\Models\Team;
 use App\Models\TeamRanking;
 use App\Models\Venue;
+use App\Support\HomeTeams;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -26,7 +27,15 @@ class TeamController extends Controller
      */
     public function index(): AnonymousResourceCollection
     {
-        return TeamSummaryResource::collection($this->playingTeams()->orderBy('name')->get());
+        return TeamSummaryResource::collection(Team::query()->playing()->orderBy('name')->get());
+    }
+
+    /**
+     * The few teams of the home page's "Team Fixtures" section, chosen in the admin dashboard.
+     */
+    public function home(): AnonymousResourceCollection
+    {
+        return TeamSummaryResource::collection(HomeTeams::list());
     }
 
     /**
@@ -38,7 +47,7 @@ class TeamController extends Controller
             ->flatMap(fn (Fixture $fixture): array => [$fixture->local_team_id, $fixture->visitor_team_id])
             ->unique();
 
-        $items = $this->playingTeams()->orderBy('name')->get()->map(fn (Team $team): array => [
+        $items = Team::query()->playing()->orderBy('name')->get()->map(fn (Team $team): array => [
             'slug' => $team->slug,
             'name' => $team->name,
             'badge' => $team->shortName(),
@@ -249,15 +258,5 @@ class TeamController extends Controller
             ['label' => 'Lost', 'value' => (string) max($played - $won - $noResult, 0)],
             ['label' => 'No result', 'value' => (string) $noResult],
         ];
-    }
-
-    /**
-     * @return Builder<Team>
-     */
-    private function playingTeams(): Builder
-    {
-        return Team::query()->where(fn (Builder $query) => $query
-            ->whereIn('id', Fixture::query()->select('local_team_id'))
-            ->orWhereIn('id', Fixture::query()->select('visitor_team_id')));
     }
 }
