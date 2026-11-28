@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\SiteSettingsController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\TickerController;
 use App\Http\Controllers\Api\V1\WriterController;
+use App\Http\Middleware\UseVisitorTimezone;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -66,7 +67,7 @@ Route::get('competitions/spotlight', [CompetitionController::class, 'spotlight']
 Route::get('matches', [MatchController::class, 'index'])->name('matches.index');
 Route::get('matches/summary', [MatchController::class, 'summary'])->name('matches.summary');
 Route::get('matches/{slug}', [MatchController::class, 'show'])->name('matches.show');
-Route::get('matchday', MatchdayController::class)->name('matchday');
+Route::get('matchday', MatchdayController::class)->middleware(UseVisitorTimezone::class)->name('matchday');
 
 Route::get('series', [SeriesController::class, 'index'])->name('series.index');
 Route::get('series/{slug}', [SeriesController::class, 'show'])->name('series.show');
