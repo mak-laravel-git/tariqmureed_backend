@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Article;
 use App\Models\Fixture;
 use App\Support\Scoreboard;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
@@ -86,7 +87,26 @@ class TickerController extends Controller
             ->orderBy('starting_at')
             ->limit(3)
             ->get()
-            ->map(fn (Fixture $fixture): array => $this->entry($fixture, 'NEXT', $fixture->starting_at->setTimezone($timezone)->format('D H:i')));
+            ->map(function (Fixture $fixture) use ($timezone): array {
+                $startsAt = $fixture->starting_at->setTimezone($timezone);
+
+                // `lead` and `startsAt` let the website write the time in the visitor's own time zone.
+                return [
+                    ...$this->entry($fixture, 'NEXT', $startsAt->format('D H:i').' '.$this->offsetLabel($startsAt)),
+                    'lead' => $this->entry($fixture, 'NEXT', null)['text'],
+                    'startsAt' => $fixture->starting_at->toIso8601String(),
+                ];
+            });
+    }
+
+    /**
+     * "GMT+6", "GMT+5:30" or "GMT".
+     */
+    private function offsetLabel(CarbonInterface $time): string
+    {
+        $offset = $time->format('P');
+
+        return $offset === '+00:00' ? 'GMT' : 'GMT'.preg_replace(['/([+-])0/', '/:00$/'], ['$1', ''], $offset);
     }
 
     /**

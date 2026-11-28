@@ -61,6 +61,9 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+                // Sorted match lists carry whole scorecards: with MySQL's small default buffer they fail
+                // with "Out of sort memory".
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_INIT_COMMAND : PDO::MYSQL_ATTR_INIT_COMMAND) => 'SET SESSION sort_buffer_size = '.(int) env('DB_SORT_BUFFER_SIZE', 4194304),
             ]) : [],
         ],
 

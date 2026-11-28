@@ -110,7 +110,12 @@ abstract class ResourceController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        return response()->json(['data' => $this->record(($this->model())::query()->with($this->relations())->findOrFail($id))]);
+        $model = ($this->model())::query()->with($this->relations())->findOrFail($id);
+
+        return response()->json(['data' => [
+            ...$this->record($model),
+            'history' => ActivityLog::historyOf($this->subject(), $model, $this->label($model)),
+        ]]);
     }
 
     public function store(Request $request): JsonResponse
@@ -118,7 +123,7 @@ abstract class ResourceController extends Controller
         $model = new ($this->model());
 
         $this->save($model, $request->validate($this->rules($request), $this->messages()));
-        ActivityLog::record($request->user(), 'created', $this->subject(), $this->label($model));
+        ActivityLog::record($request->user(), 'created', $this->subject(), $this->label($model), $model->getKey());
 
         return response()->json(['data' => $this->record($model->load($this->relations()))], 201);
     }
@@ -128,7 +133,7 @@ abstract class ResourceController extends Controller
         $model = ($this->model())::query()->findOrFail($id);
 
         $this->save($model, $request->validate($this->rules($request), $this->messages()));
-        ActivityLog::record($request->user(), 'updated', $this->subject(), $this->label($model));
+        ActivityLog::record($request->user(), 'updated', $this->subject(), $this->label($model), $model->getKey());
 
         return response()->json(['data' => $this->record($model->load($this->relations()))]);
     }
@@ -137,7 +142,7 @@ abstract class ResourceController extends Controller
     {
         $model = ($this->model())::query()->findOrFail($id);
 
-        ActivityLog::record($request->user(), 'deleted', $this->subject(), $this->label($model));
+        ActivityLog::record($request->user(), 'deleted', $this->subject(), $this->label($model), $model->getKey());
         $model->delete();
 
         return response()->json(null, 204);
