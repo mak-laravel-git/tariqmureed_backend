@@ -27,7 +27,8 @@ class MatchController extends Controller
 
     /**
      * Matches filtered by state ("live" includes innings and meal breaks). With order=priority the live and
-     * result lists put the important competitions first (see MatchPriority); every other list goes by time.
+     * result lists put the important competitions first (see MatchPriority), the live list keeping the matches
+     * paused for a break after those being played; every other list goes by time.
      */
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -115,7 +116,10 @@ class MatchController extends Controller
             return MatchPriority::takeResults($this->results()->reorder(), $limit);
         }
 
-        $live = $this->query()->inPlay();
+        $breaks = MatchState::BREAK_STATUSES;
+        // Matches being played go before those paused for a break, however important the paused one is.
+        $live = $this->query()->inPlay()
+            ->orderByRaw('case when status in ('.implode(', ', array_fill(0, count($breaks), '?')).') then 1 else 0 end', $breaks);
         MatchPriority::rank($live);
 
         return $live->orderBy('starting_at')->get();
