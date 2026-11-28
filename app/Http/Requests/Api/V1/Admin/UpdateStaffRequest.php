@@ -34,7 +34,7 @@ class UpdateStaffRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:120'],
             'subtitle' => ['required', 'email', 'max:190', Rule::unique('users', 'email')->ignore($this->route('id'))],
-            'owner' => ['required', Rule::in(array_column(RoleEnum::cases(), 'value'))],
+            'owner' => ['required', Rule::exists('roles', 'name')->where('guard_name', RoleEnum::ADMIN->guard())],
             // Left empty, the account keeps its password.
             'password' => ['nullable', 'confirmed', Password::defaults()],
         ];
@@ -50,7 +50,7 @@ class UpdateStaffRequest extends FormRequest
             'subtitle.required' => 'Enter an email address.',
             'subtitle.email' => 'Enter a valid email address.',
             'subtitle.unique' => 'Another account already uses this email address.',
-            'owner.in' => 'The role must be one of: '.implode(', ', array_column(RoleEnum::cases(), 'value')).'.',
+            'owner.exists' => 'Choose one of the roles listed under Roles & Permissions.',
             'password.required' => 'Enter a password for the new account.',
             'password.confirmed' => 'The two passwords do not match.',
         ];
