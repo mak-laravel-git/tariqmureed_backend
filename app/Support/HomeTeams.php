@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final class HomeTeams
 {
-    public const LIMIT = 10;
+    public const LIMIT = 15;
 
     private const KEY = 'homeTeams';
 

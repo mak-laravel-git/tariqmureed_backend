@@ -102,6 +102,8 @@ Route::get('articles/{slug}', [ArticleController::class, 'show'])->name('article
 Route::get('news', NewsController::class)->name('news');
 Route::get('rankings', RankingController::class)->name('rankings');
 Route::get('stats', [StatsController::class, 'stats'])->name('stats');
+Route::get('stats/highlights', [StatsController::class, 'highlights'])->name('stats.highlights');
+Route::get('stats/batting-leaders', [StatsController::class, 'battingLeaders'])->name('stats.batting-leaders');
 Route::get('records', [StatsController::class, 'records'])->name('records');
 Route::get('writers', [WriterController::class, 'index'])->name('writers.index');
 Route::get('writers/{slug}', [WriterController::class, 'show'])->name('writers.show');
