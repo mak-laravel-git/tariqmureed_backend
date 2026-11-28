@@ -81,10 +81,22 @@ it('puts international matches first among the live ones', function () {
     $international = priorityLeague(1, 'Test Championship', 'International');
     $league = priorityLeague(2, 'Big Bash League');
     priorityMatch('league-live', $league, -5, '1st Innings');
-    priorityMatch('country-live', $international, -1, 'Lunch');
+    priorityMatch('country-live', $international, -1, '2nd Innings');
 
     expect(prioritySlugs('state=live&order=priority'))->toBe(['country-live', 'league-live']);
 });
+
+it('puts the matches being played before those paused for a break', function (string $break) {
+    $international = priorityLeague(1, 'Test Championship', 'International');
+    $league = priorityLeague(2, 'Big Bash League');
+    priorityMatch('country-paused', $international, -5, $break);
+    priorityMatch('league-paused', $league, -6, $break);
+    priorityMatch('league-playing', $league, -1, '1st Innings');
+    priorityMatch('country-playing', $international, -2, '3rd Innings');
+
+    expect(prioritySlugs('state=live&order=priority'))
+        ->toBe(['country-playing', 'league-playing', 'country-paused', 'league-paused']);
+})->with(['Innings Break', 'Tea Break', 'Lunch', 'Dinner', 'Int.', 'Stump Day 2']);
 
 it('follows the order arranged in the dashboard before anything else', function () {
     signInForLiveCentre();
