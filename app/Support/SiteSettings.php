@@ -25,6 +25,13 @@ final class SiteSettings
         'gaMeasurementId' => '',
         'adsenseClientId' => '',
         'consentMode' => 'builtin',
+        // Social media links of the header and footer icons.
+        'socialX' => '',
+        'socialFacebook' => '',
+        'socialInstagram' => '',
+        'socialYoutube' => '',
+        'socialTiktok' => '',
+        'socialWhatsapp' => '',
         // Search engines and social sharing (admin "SEO" screen).
         'seoSiteUrl' => '',
         'seoTitleTemplate' => '%s | TMN Sport',
@@ -38,6 +45,7 @@ final class SiteSettings
     /** Settings the public website may read (identifiers and contact details are public anyway). */
     private const PUBLIC = [
         'websiteName', 'contactEmail', 'contactAddress', 'gaMeasurementId', 'adsenseClientId', 'consentMode',
+        'socialX', 'socialFacebook', 'socialInstagram', 'socialYoutube', 'socialTiktok', 'socialWhatsapp',
         'seoSiteUrl', 'seoTitleTemplate', 'seoDefaultImage', 'seoTwitterHandle', 'seoIndexing', 'seoGoogleVerification', 'seoBingVerification',
     ];
 

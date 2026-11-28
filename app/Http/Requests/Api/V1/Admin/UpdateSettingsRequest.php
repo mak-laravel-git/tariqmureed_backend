@@ -30,6 +30,12 @@ class UpdateSettingsRequest extends FormRequest
             'gaMeasurementId' => ['sometimes', 'nullable', 'regex:/^G-[A-Z0-9]{4,20}$/'],
             'adsenseClientId' => ['sometimes', 'nullable', 'regex:/^ca-pub-\d{10,20}$/'],
             'consentMode' => ['sometimes', 'required', Rule::in(['builtin', 'google'])],
+            'socialX' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
+            'socialFacebook' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
+            'socialInstagram' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
+            'socialYoutube' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
+            'socialTiktok' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
+            'socialWhatsapp' => ['sometimes', 'nullable', 'url:http,https', 'max:255'],
             'seoSiteUrl' => ['sometimes', 'nullable', 'url:http,https', 'max:190'],
             'seoTitleTemplate' => ['sometimes', 'required', 'string', 'max:100', 'regex:/%s/'],
             'seoDefaultImage' => ['sometimes', 'nullable', 'string', 'max:500'],
@@ -53,6 +59,12 @@ class UpdateSettingsRequest extends FormRequest
             'seoGoogleVerification.regex' => 'Paste only the verification code, not the whole meta tag.',
             'seoBingVerification.regex' => 'Paste only the verification code, not the whole meta tag.',
             'adsenseClientId.regex' => 'The AdSense publisher ID must look like ca-pub-1234567890123456.',
+            'socialX.url' => 'The X link must be a full address starting with https://.',
+            'socialFacebook.url' => 'The Facebook link must be a full address starting with https://.',
+            'socialInstagram.url' => 'The Instagram link must be a full address starting with https://.',
+            'socialYoutube.url' => 'The YouTube link must be a full address starting with https://.',
+            'socialTiktok.url' => 'The TikTok link must be a full address starting with https://.',
+            'socialWhatsapp.url' => 'The WhatsApp link must be a full address starting with https://.',
         ];
     }
 }
