@@ -56,6 +56,12 @@ it('serves default public settings before anything is saved', function () {
             'gaMeasurementId' => '',
             'adsenseClientId' => '',
             'consentMode' => 'builtin',
+            'socialX' => '',
+            'socialFacebook' => '',
+            'socialInstagram' => '',
+            'socialYoutube' => '',
+            'socialTiktok' => '',
+            'socialWhatsapp' => '',
             'seoSiteUrl' => '',
             'seoTitleTemplate' => '%s | TMN Sport',
             'seoDefaultImage' => '',
@@ -129,6 +135,28 @@ it('rejects malformed tracking ids and unknown consent modes', function () {
         'contactEmail' => 'not-an-email',
     ])->assertUnprocessable()->assertJsonValidationErrors(['gaMeasurementId', 'adsenseClientId', 'consentMode', 'contactEmail']);
 });
+
+it('saves the social media links, shows them publicly and clears a blank one', function () {
+    actingAsStaff();
+
+    $this->putJson('/api/v1/admin/settings', ['socialFacebook' => 'https://facebook.com/tmnsport', 'socialWhatsapp' => 'https://wa.me/8801700000000'])->assertOk();
+
+    $this->getJson('/api/v1/settings')
+        ->assertOk()
+        ->assertJsonPath('data.socialFacebook', 'https://facebook.com/tmnsport')
+        ->assertJsonPath('data.socialWhatsapp', 'https://wa.me/8801700000000')
+        ->assertJsonPath('data.socialX', '');
+
+    $this->putJson('/api/v1/admin/settings', ['socialFacebook' => ''])->assertOk();
+
+    expect(SiteSettings::all()['socialFacebook'])->toBe('');
+});
+
+it('rejects social links that are not web addresses', function (string $value) {
+    actingAsStaff();
+
+    $this->putJson('/api/v1/admin/settings', ['socialX' => $value])->assertUnprocessable()->assertJsonValidationErrors('socialX');
+})->with(['tmnsport', '@tmnsport', 'javascript:alert(1)', 'ftp://example.com/tmn']);
 
 it('answers 404 for a page that was never customised', function () {
     $this->getJson('/api/v1/pages/privacy-policy')->assertNotFound();
