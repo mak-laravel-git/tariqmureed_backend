@@ -11,7 +11,9 @@ use App\Models\League;
 use App\Services\SportMonks\SportMonksClient;
 use App\Services\SportMonks\SportMonksException;
 use App\Services\SportMonks\SportMonksSyncer;
+use App\Support\MatchPriority;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -24,12 +26,17 @@ class MatchController extends Controller
     private const LIVE_REFRESH_SECONDS = 30;
 
     /**
-     * Matches filtered by state ("live" includes innings and meal breaks).
+     * Matches filtered by state ("live" includes innings and meal breaks). With order=priority the live and
+     * result lists put the important competitions first (see MatchPriority); every other list goes by time.
      */
     public function index(Request $request): AnonymousResourceCollection
     {
         $limit = min(max((int) $request->query('limit', 100), 1), 200);
         $state = (string) $request->query('state', 'all');
+
+        if ($request->query('order') === 'priority' && in_array($state, ['live', 'result'], true)) {
+            return MatchResource::collection($this->byPriority($state, $limit));
+        }
 
         $matches = match ($state) {
             'live' => $this->live()->get(),
@@ -96,6 +103,22 @@ class MatchController extends Controller
             $fixture->state() === MatchState::RESULT => $fetched === null,
             default => false,
         };
+    }
+
+    /**
+     * @param  'live'|'result'  $state
+     * @return Collection<int, Fixture>
+     */
+    private function byPriority(string $state, int $limit): Collection
+    {
+        if ($state === 'result') {
+            return MatchPriority::takeResults($this->results()->reorder(), $limit);
+        }
+
+        $live = $this->query()->inPlay();
+        MatchPriority::rank($live);
+
+        return $live->orderBy('starting_at')->get();
     }
 
     /**

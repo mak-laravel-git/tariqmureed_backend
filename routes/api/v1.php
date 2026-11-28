@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryControl
 use App\Http\Controllers\Api\V1\Admin\CompetitionController as AdminCompetitionController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\HomeTeamController as AdminHomeTeamController;
+use App\Http\Controllers\Api\V1\Admin\LiveCentreController as AdminLiveCentreController;
 use App\Http\Controllers\Api\V1\Admin\MediaController as AdminMediaController;
 use App\Http\Controllers\Api\V1\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Api\V1\Admin\ProfileController as AdminProfileController;
@@ -78,6 +79,7 @@ Route::get('teams/directory', [TeamController::class, 'directory'])->name('teams
 Route::get('teams/home', [TeamController::class, 'home'])->name('teams.home');
 Route::get('teams/{slug}', [TeamController::class, 'show'])->name('teams.show');
 Route::get('teams/{slug}/fixtures', [TeamController::class, 'fixtures'])->name('teams.fixtures');
+Route::get('teams/{slug}/schedule', [TeamController::class, 'schedule'])->name('teams.schedule');
 
 Route::get('players', [PlayerController::class, 'index'])->name('players.index');
 Route::get('players/trending', [PlayerController::class, 'trending'])->name('players.trending');
@@ -174,6 +176,9 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
 
     Route::get('home-teams', [AdminHomeTeamController::class, 'index'])->middleware('can:settings.view')->name('home-teams.index');
     Route::put('home-teams', [AdminHomeTeamController::class, 'update'])->middleware('can:settings.edit')->name('home-teams.update');
+
+    Route::get('live-centre', [AdminLiveCentreController::class, 'index'])->middleware('can:settings.view')->name('live-centre.index');
+    Route::put('live-centre', [AdminLiveCentreController::class, 'update'])->middleware('can:settings.edit')->name('live-centre.update');
 
     Route::prefix('integrations/sportmonks')->name('integrations.sportmonks.')
         ->controller(SportMonksIntegrationController::class)
