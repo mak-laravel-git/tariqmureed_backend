@@ -128,6 +128,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
     Route::prefix('staff')->name('staff.')->controller(AdminStaffController::class)->group(function () {
         Route::get('/', 'index')->middleware('can:users.index')->name('index');
         Route::post('/', 'store')->middleware('can:users.create')->name('store');
+        Route::get('roles', 'roles')->middleware('can:users.index')->name('roles');
         Route::get('{id}', 'show')->middleware('can:users.view')->name('show');
         Route::put('{id}', 'update')->middleware('can:users.edit')->name('update');
         Route::delete('{id}', 'destroy')->middleware('can:users.delete')->name('destroy');
@@ -135,6 +136,8 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
 
     Route::get('roles/permissions', [AdminRoleController::class, 'permissions'])->middleware('can:roles.view')->name('roles.permissions');
     Route::put('roles/{role}/permissions', [AdminRoleController::class, 'update'])->middleware('can:roles.edit')->name('roles.update');
+    Route::post('roles', [AdminRoleController::class, 'store'])->middleware('can:roles.create')->name('roles.store');
+    Route::delete('roles/{role}', [AdminRoleController::class, 'destroy'])->middleware('can:roles.delete')->name('roles.destroy');
 
     Route::get('articles/tags', [AdminArticleController::class, 'tags'])->middleware('can:articles.index')->name('articles.tags');
     Route::get('advertisements/placements', [AdminAdvertisementController::class, 'placements'])->middleware('can:advertisements.index')->name('advertisements.placements');

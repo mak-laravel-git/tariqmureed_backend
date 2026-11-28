@@ -8,10 +8,12 @@ use App\Http\Requests\Api\V1\Admin\StoreStaffRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateStaffRequest;
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Support\RoleAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 class StaffController extends Controller
 {
@@ -42,6 +44,26 @@ class StaffController extends Controller
             'data' => $users->getCollection()->map(fn (User $user): array => $this->record($user))->values(),
             'meta' => ['total' => $users->total()],
         ]);
+    }
+
+    /**
+     * The roles the signed-in account may give to someone: the choices of the staff form.
+     */
+    public function roles(Request $request): JsonResponse
+    {
+        $order = array_column(RoleEnum::cases(), 'value');
+
+        $roles = Role::query()
+            ->with('permissions')
+            ->where('guard_name', RoleEnum::ADMIN->guard())
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Role $role): bool => RoleAccess::covers($request->user(), $role))
+            ->sortBy(fn (Role $role): int => ($position = array_search($role->name, $order, true)) === false ? count($order) : $position)
+            ->map(fn (Role $role): array => ['value' => $role->name, 'label' => Str::headline($role->name)])
+            ->values();
+
+        return response()->json(['data' => $roles]);
     }
 
     public function show(string $id): JsonResponse
@@ -140,16 +162,26 @@ class StaffController extends Controller
     }
 
     /**
-     * Only a super admin may change another super admin.
+     * Only a super admin may change another super admin, and nobody may change an account with more access than
+     * their own (a new password would hand that access over).
      */
     private function ensureCanManage(Request $request, User $target): void
     {
         abort_if($target->isSuperAdmin() && ! $request->user()->isSuperAdmin(), 403, 'Only a super admin can change a super admin.');
+        abort_unless(
+            RoleAccess::holds($request->user(), $target->getAllPermissions()->pluck('name')),
+            403,
+            'This account has permissions you do not have, so you cannot change it.',
+        );
     }
 
     private function ensureCanGrant(Request $request, string $role): void
     {
         abort_if($role === RoleEnum::SUPER_ADMIN->value && ! $request->user()->isSuperAdmin(), 403, 'Only a super admin can grant the super admin role.');
+
+        $model = RoleAccess::find($role);
+
+        abort_if($model !== null && ! RoleAccess::covers($request->user(), $model), 403, 'You can only give a role whose permissions you have yourself.');
     }
 
     private function isLastSuperAdmin(User $user): bool
