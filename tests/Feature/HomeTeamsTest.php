@@ -26,13 +26,13 @@ function homeTeam(int $id, string $name, bool $national = false): Team
     return Team::factory()->create(['id' => $id, 'name' => $name, 'slug' => str($name)->slug(), 'national_team' => $national]);
 }
 
-it('picks ten teams with fixtures by itself, national sides first, until some are chosen', function () {
+it('picks fifteen teams with fixtures by itself, national sides first, until some are chosen', function () {
     homeTeam(1, 'India', true);
     homeTeam(2, 'Australia', true);
     homeTeam(3, 'TBC');
     homeTeam(4, 'No Matches', true);
 
-    foreach (range(1, 10) as $number) {
+    foreach (range(1, 15) as $number) {
         homeTeam(10 + $number, sprintf('Club %02d', $number));
         Fixture::factory()->create(['local_team_id' => 10 + $number, 'visitor_team_id' => 3]);
     }
@@ -40,7 +40,7 @@ it('picks ten teams with fixtures by itself, national sides first, until some ar
     Fixture::factory()->create(['local_team_id' => 1, 'visitor_team_id' => 2]);
 
     expect($this->getJson('/api/v1/teams/home')->assertOk()->json('data.*.name'))
-        ->toBe(['Australia', 'India', 'Club 01', 'Club 02', 'Club 03', 'Club 04', 'Club 05', 'Club 06', 'Club 07', 'Club 08']);
+        ->toBe(['Australia', 'India', 'Club 01', 'Club 02', 'Club 03', 'Club 04', 'Club 05', 'Club 06', 'Club 07', 'Club 08', 'Club 09', 'Club 10', 'Club 11', 'Club 12', 'Club 13']);
 });
 
 it('shows the website the chosen teams in the chosen order, with or without matches', function () {
@@ -86,17 +86,17 @@ it('lists the other teams for choosing, those with matches first', function () {
 
     $data = $this->getJson('/api/v1/admin/home-teams')->assertOk()->json('data');
 
-    expect($data['limit'])->toBe(10)
+    expect($data['limit'])->toBe(15)
         ->and($data['selected'])->toBe([])
         ->and(collect($data['available'])->pluck('name')->all())->toBe(['Perth Scorchers', 'Sydney Sixers', 'Afghanistan'])
         ->and($data['available'][0])->toBe(['id' => '3', 'name' => 'Perth Scorchers', 'detail' => 'Domestic', 'matches' => 1]);
 });
 
-it('accepts ten teams and rejects an eleventh', function () {
+it('accepts fifteen teams and rejects a sixteenth', function () {
     signInForHomeTeams();
-    $ids = Team::factory()->count(11)->create()->modelKeys();
+    $ids = Team::factory()->count(16)->create()->modelKeys();
 
-    $this->putJson('/api/v1/admin/home-teams', ['teams' => array_slice($ids, 0, 10)])->assertOk()->assertJsonCount(10, 'data.selected');
+    $this->putJson('/api/v1/admin/home-teams', ['teams' => array_slice($ids, 0, 15)])->assertOk()->assertJsonCount(15, 'data.selected');
     $this->putJson('/api/v1/admin/home-teams', ['teams' => $ids])->assertUnprocessable()->assertJsonValidationErrors('teams');
 });
 

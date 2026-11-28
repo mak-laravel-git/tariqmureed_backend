@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Support\CricketStats;
+use App\Support\SeasonLeaders;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -34,6 +35,33 @@ class StatsController extends Controller
             'metricCount' => count($tables),
             'tables' => $tables,
         ]]);
+    }
+
+    /**
+     * The home page's season cards.
+     */
+    public function highlights(): JsonResponse
+    {
+        return response()->json(['data' => $this->season()['highlights']]);
+    }
+
+    /**
+     * The home page's table of the season's leading run-scorers.
+     */
+    public function battingLeaders(): JsonResponse
+    {
+        return response()->json(['data' => $this->season()['batting']]);
+    }
+
+    /**
+     * Read from every player's career figures: served from the cache, refreshed after the response once older
+     * than half an hour.
+     *
+     * @return array{highlights: array<int, array<string, string>>, batting: array<string, mixed>}
+     */
+    private function season(): array
+    {
+        return Cache::flexible('stats.season', [1800, 86400], fn (): array => SeasonLeaders::get());
     }
 
     /**
