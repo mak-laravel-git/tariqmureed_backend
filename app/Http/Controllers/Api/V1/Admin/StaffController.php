@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Enums\RoleEnum;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Admin\StoreStaffRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateStaffRequest;
 use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class StaffController extends Controller
 {
+    private const SUBJECT = 'staff account';
+
     /**
      * Staff accounts as rows of the shared admin table (name, email, role).
      */
@@ -42,30 +46,74 @@ class StaffController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        return response()->json(['data' => $this->record(User::query()->with('roles')->findOrFail($id))]);
+        $user = User::query()->with('roles')->findOrFail($id);
+
+        return response()->json(['data' => [
+            ...$this->record($user),
+            'history' => ActivityLog::historyOf(self::SUBJECT, $user, $user->name),
+        ]]);
     }
 
     /**
-     * Rename an account, change its email address or move it to another role.
+     * Create an account with the password the administrator chose for it.
+     */
+    public function store(StoreStaffRequest $request): JsonResponse
+    {
+        $role = $request->validated('owner');
+
+        $this->ensureCanGrant($request, $role);
+
+        $user = DB::transaction(function () use ($request, $role): User {
+            $user = User::query()->create([
+                'name' => $request->validated('title'),
+                'email' => $request->validated('subtitle'),
+                'password' => $request->validated('password'),
+            ]);
+            $user->assignRole($role);
+
+            return $user;
+        });
+
+        ActivityLog::record($request->user(), 'created', self::SUBJECT, $user->name, $user->id);
+
+        return response()->json(['data' => $this->record($user->load('roles'))], 201);
+    }
+
+    /**
+     * Rename an account, change its email address, move it to another role or give it a new password.
      */
     public function update(UpdateStaffRequest $request, string $id): JsonResponse
     {
         $user = User::query()->with('roles')->findOrFail($id);
         $role = $request->validated('owner');
+        $password = $request->validated('password');
 
         $this->ensureCanManage($request, $user);
-
-        if ($role === RoleEnum::SUPER_ADMIN->value && ! $request->user()->isSuperAdmin()) {
-            return response()->json(['message' => 'Only a super admin can grant the super admin role.'], 403);
-        }
+        $this->ensureCanGrant($request, $role);
 
         if ($user->isSuperAdmin() && $role !== RoleEnum::SUPER_ADMIN->value && $this->isLastSuperAdmin($user)) {
             return response()->json(['message' => 'The last super admin cannot be moved to another role.'], 422);
         }
 
-        $user->update(['name' => $request->validated('title'), 'email' => $request->validated('subtitle')]);
+        if ($user->is($request->user())) {
+            // Either would be an easy way to lock yourself out.
+            abort_if(! $user->hasRole($role), 422, 'You cannot change your own role. Ask another administrator.');
+            abort_if($password !== null, 422, 'Change your own password from Password Management.');
+        }
+
+        $user->update([
+            'name' => $request->validated('title'),
+            'email' => $request->validated('subtitle'),
+            ...($password !== null ? ['password' => $password] : []),
+        ]);
         $user->syncRoles([$role]);
-        ActivityLog::record($request->user(), 'updated', 'staff account', $user->name);
+        ActivityLog::record($request->user(), 'updated', self::SUBJECT, $user->name, $user->id);
+
+        if ($password !== null) {
+            // Whoever was signed in with the old password has to sign in again.
+            $user->tokens()->delete();
+            ActivityLog::record($request->user(), 'password changed', self::SUBJECT, $user->name, $user->id);
+        }
 
         return response()->json(['data' => $this->record($user->refresh()->load('roles'))]);
     }
@@ -84,7 +132,7 @@ class StaffController extends Controller
             return response()->json(['message' => 'The last super admin cannot be deleted.'], 422);
         }
 
-        ActivityLog::record($request->user(), 'deleted', 'staff account', $user->name);
+        ActivityLog::record($request->user(), 'deleted', self::SUBJECT, $user->name, $user->id);
         $user->tokens()->delete();
         $user->delete();
 
@@ -99,21 +147,29 @@ class StaffController extends Controller
         abort_if($target->isSuperAdmin() && ! $request->user()->isSuperAdmin(), 403, 'Only a super admin can change a super admin.');
     }
 
+    private function ensureCanGrant(Request $request, string $role): void
+    {
+        abort_if($role === RoleEnum::SUPER_ADMIN->value && ! $request->user()->isSuperAdmin(), 403, 'Only a super admin can grant the super admin role.');
+    }
+
     private function isLastSuperAdmin(User $user): bool
     {
         return User::role(RoleEnum::SUPER_ADMIN->value)->whereKeyNot($user->getKey())->doesntExist();
     }
 
     /**
-     * @return array{id: string, title: string, subtitle: string, owner: string, status: string, updatedAt: string, notes: null}
+     * @return array{id: string, title: string, subtitle: string, owner: string, role: string, status: string, updatedAt: string, notes: null}
      */
     private function record(User $user): array
     {
+        $role = (string) $user->roles->first()?->name;
+
         return [
             'id' => (string) $user->id,
             'title' => $user->name,
             'subtitle' => $user->email,
-            'owner' => Str::headline((string) $user->roles->first()?->name),
+            'owner' => Str::headline($role),
+            'role' => $role,
             'status' => 'Active',
             'updatedAt' => $user->updated_at->diffForHumans(),
             'notes' => null,
