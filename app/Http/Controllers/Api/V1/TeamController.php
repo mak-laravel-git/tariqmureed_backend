@@ -125,6 +125,40 @@ class TeamController extends Controller
     }
 
     /**
+     * Everything the team has on record, for its "fixtures" page: matches being played or still to come (the
+     * nearest first), and matches that are over (the newest first).
+     */
+    public function schedule(string $slug): JsonResponse
+    {
+        $team = Team::query()->where('slug', $slug)->firstOrFail();
+
+        $matches = fn (): Builder => Fixture::query()
+            ->with(['league', 'localTeam', 'visitorTeam', 'venue'])
+            ->where(fn (Builder $query) => $query->where('local_team_id', $team->id)->orWhere('visitor_team_id', $team->id));
+
+        $upcoming = $matches()
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $query) => $query->inPlay())
+                // A match that should have started long ago and never did is left out.
+                ->orWhere(fn (Builder $query) => $query->upcoming()->where('starting_at', '>=', now()->subHours(3))))
+            ->orderBy('starting_at')
+            ->limit(100)
+            ->get();
+
+        $results = $matches()
+            ->finished()
+            ->orderByDesc('starting_at')
+            ->limit(50)
+            ->get();
+
+        return response()->json(['data' => [
+            'team' => new TeamSummaryResource($team),
+            'upcoming' => MatchResource::collection($upcoming),
+            'results' => MatchResource::collection($results),
+        ]]);
+    }
+
+    /**
      * The team's place in the official table, one entry per format (men's table first).
      *
      * @return array<int, array{label: string, value: string}>

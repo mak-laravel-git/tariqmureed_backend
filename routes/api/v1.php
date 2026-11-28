@@ -78,6 +78,7 @@ Route::get('teams/directory', [TeamController::class, 'directory'])->name('teams
 Route::get('teams/home', [TeamController::class, 'home'])->name('teams.home');
 Route::get('teams/{slug}', [TeamController::class, 'show'])->name('teams.show');
 Route::get('teams/{slug}/fixtures', [TeamController::class, 'fixtures'])->name('teams.fixtures');
+Route::get('teams/{slug}/schedule', [TeamController::class, 'schedule'])->name('teams.schedule');
 
 Route::get('players', [PlayerController::class, 'index'])->name('players.index');
 Route::get('players/trending', [PlayerController::class, 'trending'])->name('players.trending');
