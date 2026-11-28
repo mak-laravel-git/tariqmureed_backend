@@ -39,7 +39,7 @@ return [
     'sync' => [
         // Fixture window: days back (results) and days ahead (schedule).
         'days_back' => (int) env('SPORTMONKS_DAYS_BACK', 3),
-        'days_ahead' => (int) env('SPORTMONKS_DAYS_AHEAD', 45),
+        'days_ahead' => (int) env('SPORTMONKS_DAYS_AHEAD', 365),
         // Scorecards fetched per run for matches that finished since the last sync.
         'details_per_run' => (int) env('SPORTMONKS_DETAILS_PER_RUN', 15),
         // Squads fetched per run (one call per team and season).

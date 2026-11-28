@@ -22,6 +22,9 @@ class TeamController extends Controller
     /** Without any match on record, players older than this are taken to have retired. */
     private const OLDEST_ACTIVE_AGE = 38;
 
+    /** Matches of a team in the home page's "Team Fixtures" section. */
+    private const HOME_MATCHES = 30;
+
     /**
      * Teams that appear in the synced fixtures.
      */
@@ -104,12 +107,11 @@ class TeamController extends Controller
             ->orderByDesc('total')
             ->value('venue_id');
 
-        $matches = Fixture::query()
-            ->with(['league', 'localTeam', 'visitorTeam', 'venue'])
-            ->where(fn (Builder $query) => $query->where('local_team_id', $team->id)->orWhere('visitor_team_id', $team->id))
-            ->orderByDesc('starting_at')
-            ->limit(30)
-            ->get();
+        // The match being played or coming next leads; the newest results fill the rest of the list.
+        $current = $this->currentAndComing($team)->limit(self::HOME_MATCHES)->get();
+        $matches = $current->concat(
+            $this->matchesOf($team)->finished()->orderByDesc('starting_at')->limit(self::HOME_MATCHES - $current->count())->get(),
+        );
 
         return response()->json(['data' => [
             'team' => [
@@ -132,20 +134,9 @@ class TeamController extends Controller
     {
         $team = Team::query()->where('slug', $slug)->firstOrFail();
 
-        $matches = fn (): Builder => Fixture::query()
-            ->with(['league', 'localTeam', 'visitorTeam', 'venue'])
-            ->where(fn (Builder $query) => $query->where('local_team_id', $team->id)->orWhere('visitor_team_id', $team->id));
+        $upcoming = $this->currentAndComing($team)->limit(100)->get();
 
-        $upcoming = $matches()
-            ->where(fn (Builder $query) => $query
-                ->where(fn (Builder $query) => $query->inPlay())
-                // A match that should have started long ago and never did is left out.
-                ->orWhere(fn (Builder $query) => $query->upcoming()->where('starting_at', '>=', now()->subHours(3))))
-            ->orderBy('starting_at')
-            ->limit(100)
-            ->get();
-
-        $results = $matches()
+        $results = $this->matchesOf($team)
             ->finished()
             ->orderByDesc('starting_at')
             ->limit(50)
@@ -156,6 +147,31 @@ class TeamController extends Controller
             'upcoming' => MatchResource::collection($upcoming),
             'results' => MatchResource::collection($results),
         ]]);
+    }
+
+    /**
+     * @return Builder<Fixture>
+     */
+    private function matchesOf(Team $team): Builder
+    {
+        return Fixture::query()
+            ->with(['league', 'localTeam', 'visitorTeam', 'venue'])
+            ->where(fn (Builder $query) => $query->where('local_team_id', $team->id)->orWhere('visitor_team_id', $team->id));
+    }
+
+    /**
+     * The team's matches being played or still to come, the nearest first.
+     *
+     * @return Builder<Fixture>
+     */
+    private function currentAndComing(Team $team): Builder
+    {
+        return $this->matchesOf($team)
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $query) => $query->inPlay())
+                // A match that should have started long ago and never did is left out.
+                ->orWhere(fn (Builder $query) => $query->upcoming()->where('starting_at', '>=', now()->subHours(3))))
+            ->orderBy('starting_at');
     }
 
     /**

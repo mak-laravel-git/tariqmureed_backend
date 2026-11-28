@@ -50,6 +50,34 @@ it('keeps the fifty newest results', function () {
         ->and($results[49]['slug'])->toBe('day-50');
 });
 
+it('leads the home page list with the nearest match and follows with the newest results', function () {
+    $india = scheduledTeam();
+    Fixture::factory()->create(['slug' => 'next-year', 'local_team_id' => $india->id, 'starting_at' => now()->addYear()]);
+    Fixture::factory()->finished()->create(['slug' => 'last-week', 'local_team_id' => $india->id, 'starting_at' => now()->subWeek()]);
+    Fixture::factory()->create(['slug' => 'tomorrow', 'local_team_id' => $india->id, 'starting_at' => now()->addDay()]);
+    Fixture::factory()->finished()->create(['slug' => 'yesterday', 'visitor_team_id' => $india->id]);
+    Fixture::factory()->live()->create(['slug' => 'live', 'visitor_team_id' => $india->id]);
+
+    expect($this->getJson('/api/v1/teams/india/fixtures')->assertOk()->json('data.matches.*.slug'))
+        ->toBe(['live', 'tomorrow', 'next-year', 'yesterday', 'last-week']);
+});
+
+it('keeps the home page list to thirty matches', function () {
+    $india = scheduledTeam();
+
+    foreach (range(1, 29) as $days) {
+        Fixture::factory()->create(['slug' => "in-{$days}", 'local_team_id' => $india->id, 'starting_at' => now()->addDays($days)]);
+    }
+
+    Fixture::factory()->finished()->create(['slug' => 'yesterday', 'local_team_id' => $india->id]);
+    Fixture::factory()->finished()->create(['slug' => 'last-week', 'local_team_id' => $india->id, 'starting_at' => now()->subWeek()]);
+
+    $slugs = $this->getJson('/api/v1/teams/india/fixtures')->assertOk()->json('data.matches.*.slug');
+
+    expect($slugs)->toHaveCount(30)
+        ->and($slugs[29])->toBe('yesterday');
+});
+
 it('does not know the schedule of an unknown team', function () {
     $this->getJson('/api/v1/teams/atlantis/schedule')->assertNotFound();
 });
