@@ -121,6 +121,7 @@ Route::prefix('admin')->name('admin.')->middleware('auth:sanctum')->group(functi
 
     Route::prefix('staff')->name('staff.')->controller(AdminStaffController::class)->group(function () {
         Route::get('/', 'index')->middleware('can:users.index')->name('index');
+        Route::post('/', 'store')->middleware('can:users.create')->name('store');
         Route::get('{id}', 'show')->middleware('can:users.view')->name('show');
         Route::put('{id}', 'update')->middleware('can:users.edit')->name('update');
         Route::delete('{id}', 'destroy')->middleware('can:users.delete')->name('destroy');
